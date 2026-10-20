@@ -45,6 +45,9 @@ function timeRule(slotLabel) {
   return `【时间】本次在「${label}」（${slotLabel}）发布。内容必须和时间点相符：上午别发「下班了干嘛 / 熬夜 / 睡前」这类晚上的内容，晚上别发「刚上班 / 上午开会」这类上午的内容；问题也要是那个时段的人真会聊的。`;
 }
 
+// 统一的「反 AI 味」硬规则，三种帖子都要遵守
+const ANTI_AI = '【反 AI 味 · 必须遵守】写完自己读一遍，别让人一眼看出是 AI 写的：不要「首先 / 其次 / 最后 / 总之 / 值得注意的是 / 希望对你有帮助」这类套话；不要排比、对仗、句句工整；不要滥用 emoji、波浪号、感叹号；不要「让我们一起 / 宝子们 / 家人们」这种口号腔。用词口语化，允许一点口头禅和轻微的不完美，就像在微信里跟朋友随手打的一段话。';
+
 const TEXTCARD = '~/workProjects/personal-workbench/workbench/tools/textcard.mjs';
 const IMG_DIR = '~/workProjects/xiaohongshu-mcp/images';
 const AI_TOPICS_FILE = path.join(XHS_WORK_CWD, 'ai-topics.txt');
@@ -99,6 +102,8 @@ function buildQuestionPrompt(k, { visibility, slotLabel }) {
     `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
     `8. 可先用 search_feeds 搜「${k.kw}」感受一下语感，严禁照抄。`,
     '',
+    ANTI_AI,
+    '',
     '最后回报：标题、正文、标签、图片文件名、发布结果。',
   ].join('\n');
 }
@@ -125,6 +130,8 @@ function buildAiSharePrompt({ visibility, slotLabel }) {
     `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
     recent.length ? `8. 避免和最近发过的重复（最近发过：${recent.join('、')}），换一个角度。` : '8. 尽量选一个小而具体的角度。',
     `9. 发布成功后，把本次选题的一个短关键词（2~6 字）作为一行，追加写入 ${AI_TOPICS_FILE}（文件不存在就创建）。`,
+    '',
+    ANTI_AI,
     '',
     '最后回报：标题、正文、标签、图片文件名、本次选题关键词、发布结果。',
   ].join('\n');
@@ -160,6 +167,8 @@ function buildFigurePrompt(figure, { visibility, slotLabel }) {
   lines.push(
     `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
     '8. 可先用 search_feeds 搜这个人名，感受下大家怎么聊的，严禁照抄。',
+    '',
+    ANTI_AI,
     '',
     '最后回报：标题、正文、标签、图片文件名、人物、发布结果。',
   );
