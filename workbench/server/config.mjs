@@ -37,12 +37,22 @@ export const XHS_RADAR_HOUR = Number(process.env.XHS_RADAR_HOUR || 8);
 
 // 「每天自动发小红书提问帖」：默认开；早/晚两个时间点（整点触发）；主题取榜单第 1 名
 export const XHS_AUTOPOST = (process.env.XHS_AUTOPOST || 'on') !== 'off';
-// 发帖计划：几点发什么类型。question=提问帖，ai=AI 分享
-export const XHS_AUTOPOST_PLAN = (process.env.XHS_AUTOPOST_PLAN || '9=question,15=ai')
+// 发布时段：每天这几个点各发一条（支持 HH:MM 半点）
+export const XHS_AUTOPOST_SLOTS = (process.env.XHS_AUTOPOST_SLOTS || '10:00,19:30')
   .split(',').map((s) => s.trim()).filter(Boolean)
-  .map((s) => { const [h, t] = s.split('='); return { hour: Number(h), type: (t || 'question').trim() }; })
-  .filter((p) => Number.isInteger(p.hour) && p.hour >= 0 && p.hour <= 23);
-export const XHS_AUTOPOST_HOURS = XHS_AUTOPOST_PLAN.map((p) => p.hour);
+  .map((s) => { const [h, m] = s.split(':'); return { hour: Number(h), minute: Number(m || 0) }; })
+  .filter((p) => Number.isInteger(p.hour) && p.hour >= 0 && p.hour <= 23 && Number.isInteger(p.minute) && p.minute >= 0 && p.minute <= 59);
+export const XHS_AUTOPOST_HOURS = XHS_AUTOPOST_SLOTS.map((p) => p.hour);
+// 内容类型轮换池：question=提问帖，ai=AI 分享，figure=热点人物观点。
+// 每天把池里的类型「洗牌」后分配到各时段，避免老把同一类型固定在同一时间点。
+export const XHS_AUTOPOST_ROTATION = (process.env.XHS_AUTOPOST_ROTATION || 'question,ai')
+  .split(',').map((s) => s.trim()).filter(Boolean)
+  .map((t) => (['question', 'ai', 'figure'].includes(t) ? t : 'question'));
+// 可选：显式指定覆盖轮换，格式 HH[:MM]=type,...（例：10:00=question,19:30=ai）；留空则用上面的轮换
+export const XHS_AUTOPOST_PLAN = (process.env.XHS_AUTOPOST_PLAN || '')
+  .split(',').map((s) => s.trim()).filter(Boolean)
+  .map((s) => { const [t, ty] = s.split('='); const [h, m] = (t || '').split(':'); return { hour: Number(h), minute: Number(m || 0), type: (ty || 'question').trim() }; })
+  .filter((p) => Number.isInteger(p.hour) && Number.isInteger(p.minute));
 export const XHS_AUTOPOST_METRIC = process.env.XHS_AUTOPOST_METRIC || 'medLikes'; // medLikes | medCol | medSh
 export const XHS_AUTOPOST_VISIBILITY = process.env.XHS_AUTOPOST_VISIBILITY || '公开可见'; // 或「仅自己可见」
 

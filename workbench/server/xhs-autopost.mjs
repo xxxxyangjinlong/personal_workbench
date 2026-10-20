@@ -1,11 +1,11 @@
-// 定时自动发（默认计划 9:00 提问帖 / 15:00 AI 分享）；类型：question / ai / figure。
+// 定时自动发（默认计划 10:00 提问帖 / 19:30 AI 分享）；类型：question / ai / figure。
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getLatestSnapshot, runScan, isScanning } from './xhs-radar.mjs';
 import {
-  XHS_WORK_CWD, XHS_AUTOPOST, XHS_AUTOPOST_PLAN, XHS_AUTOPOST_HOURS, XHS_AUTOPOST_METRIC, XHS_AUTOPOST_VISIBILITY,
-  XHS_FIGURE_TOPICS_FILE, XHS_ROTATE_DAYS,
+  XHS_WORK_CWD, XHS_AUTOPOST, XHS_AUTOPOST_SLOTS, XHS_AUTOPOST_ROTATION, XHS_AUTOPOST_PLAN,
+  XHS_AUTOPOST_METRIC, XHS_AUTOPOST_VISIBILITY, XHS_FIGURE_TOPICS_FILE, XHS_ROTATE_DAYS,
 } from './config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,7 @@ const dayBefore = (n) => { const d = new Date(); d.setDate(d.getDate() - n); con
 const loadState = () => { try { return JSON.parse(readFileSync(STATE_FILE, 'utf8')); } catch { return {}; } };
 const saveState = (s) => { mkdirSync(DATA_DIR, { recursive: true }); writeFileSync(STATE_FILE, JSON.stringify(s, null, 1)); };
 const readLines = (f) => { try { return readFileSync(f, 'utf8').split('\n').map((s) => s.trim()).filter(Boolean); } catch { return []; } };
+const slotKey = (p) => `${String(p.hour).padStart(2, '0')}:${String(p.minute || 0).padStart(2, '0')}`;
 
 /** 取榜单第 1 名；exclude 内的品类会被跳过（用于同品类隔天不重复） */
 export function topKeyword(snapshot, metric = XHS_AUTOPOST_METRIC, exclude = []) {
@@ -31,6 +32,17 @@ export function topKeyword(snapshot, metric = XHS_AUTOPOST_METRIC, exclude = [])
 function recentUsedKeywords(state, days = XHS_ROTATE_DAYS) {
   const exDates = new Set(Array.from({ length: days }, (_, i) => dayBefore(i + 1)));
   return (state.history || []).filter((h) => h.type === 'question' && exDates.has(h.date)).map((h) => h.kw);
+}
+
+/** 按发布时段给出「内容要和时间点相符」的规则 */
+function timeRule(slotLabel) {
+  const h = Number(String(slotLabel || '').split(':')[0]);
+  if (!Number.isInteger(h)) return '';
+  const label = h >= 5 && h < 11 ? '上午上班时段'
+    : h >= 11 && h < 14 ? '中午午休时段'
+      : h >= 14 && h < 18 ? '下午上班时段'
+        : h >= 18 && h < 23 ? '晚上下班后' : '深夜';
+  return `【时间】本次在「${label}」（${slotLabel}）发布。内容必须和时间点相符：上午别发「下班了干嘛 / 熬夜 / 睡前」这类晚上的内容，晚上别发「刚上班 / 上午开会」这类上午的内容；问题也要是那个时段的人真会聊的。`;
 }
 
 const TEXTCARD = '~/workProjects/personal-workbench/workbench/tools/textcard.mjs';
@@ -53,14 +65,30 @@ function pickFigure() {
   return all.find((f) => !used.has(f.name)) || all[0] || null;
 }
 
+// —— 每天把轮换池里的类型「按天平移」分配到各时段：保证每个时段都会轮到不同类型 ——
+const dayIndex = (dateStr) => { const [y, mo, da] = dateStr.split('-').map(Number); return Math.floor(Date.UTC(y, mo - 1, da) / 86400000); };
+export function typesForDay(dateStr, n) {
+  let rot = [...new Set((XHS_AUTOPOST_ROTATION && XHS_AUTOPOST_ROTATION.length) ? XHS_AUTOPOST_ROTATION : ['question', 'ai'])];
+  rot = rot.filter((t) => t !== 'figure' || pickFigure());
+  if (!rot.length) rot = ['question'];
+  const off = ((dayIndex(dateStr) % rot.length) + rot.length) % rot.length;
+  return Array.from({ length: n }, (_, i) => rot[(off + i) % rot.length]);
+}
+function planTypeFor(slot) {
+  const hit = (XHS_AUTOPOST_PLAN || []).find((p) => p.hour === slot.hour && p.minute === (slot.minute || 0));
+  return hit ? hit.type : null;
+}
+
 function buildQuestionPrompt(k, { visibility, slotLabel }) {
+  const tr = timeRule(slotLabel);
   return [
     `【自动发帖任务 · 提问帖${slotLabel ? ' · ' + slotLabel : ''}】本次主题品类：${k.kw}`,
     '',
     '这是一个普通人的小红书账号。今天发一条「提问帖」：抛出一个大家愿意搭话的问题，靠评论互动。',
+    ...(tr ? ['', tr] : []),
     '',
     '要求：',
-    `1. 结合品类「${k.kw}」，想一个具体、生活化、门槛低的问题——看到就想说一句的那种；不要宏大、不要说教、不要引战。`,
+    `1. 结合品类「${k.kw}」，想一个具体、生活化、门槛低的问题——看到就想说一句的那种；不要宏大、不要说教、不要引战；且必须与上面的发布时间相符。`,
     '2. 第一人称，像自己真的在纠结/好奇/想吐槽某件事，可以带一句自己的情况做铺垫。',
     '3. 只用口语，不要博主腔（不要「姐妹们/宝子们/家人们」），不要 AI 腔（不要「首先/其次/总之」、不要工整排比）。',
     '4. 正文 2~4 句：铺垫 + 问题。结尾可以轻轻问一句「你们呢」，但不要「评论区告诉我/快收藏/码住」这类硬引导。',
@@ -77,11 +105,13 @@ function buildQuestionPrompt(k, { visibility, slotLabel }) {
 
 function buildAiSharePrompt({ visibility, slotLabel }) {
   const recent = recentAiTopics();
+  const tr = timeRule(slotLabel);
   return [
     `【自动发帖任务 · AI分享${slotLabel ? ' · ' + slotLabel : ''}】`,
     '',
     '这是一个普通人的小红书账号。账号主人是程序员，日常在用各种 AI 工具，自己也搭了些自动化的小东西。',
     '今天发一条「AI 使用分享」，目标：让人觉得"这人是真的在用，这个我马上能试"。',
+    ...(tr ? ['', tr] : []),
     '',
     '要求：',
     '1. 只讲**一个很具体的小点**：某个 AI 工具的用法 / 一个踩过的坑 / 一个前后对比 / 自己搭的小东西。不要泛泛谈"AI 改变了生活"。',
@@ -105,6 +135,8 @@ function buildFigurePrompt(figure, { visibility, slotLabel }) {
     '',
     '这是一个程序员的小红书账号。今天聊一个最近很火的 AI / 科技人物，分享他一个观点或做法，再加一句自己的真实感受。',
   ];
+  const tr = timeRule(slotLabel);
+  if (tr) lines.push('', tr);
   if (figure.note) lines.push(`人物线索（供参考，别照抄）：${figure.note}`);
   lines.push(
     '',
@@ -118,8 +150,8 @@ function buildFigurePrompt(figure, { visibility, slotLabel }) {
   );
   if (figure.photo) {
     lines.push(
-      `   • 用真实照片：先把 ${figure.photo} 下载到 ${IMG_DIR}/（例如 curl -L -o ${IMG_DIR}/fig-<短标识>.jpg "<URL>"），发布时用容器内路径 /app/images/<文件名>；可再配一张文字卡。`,
-      `     下载后确认文件是有效图片（file 命令 / 大小 >10KB），否则改用文字卡。`,
+      `   • 用公开渠道的真实照片：先把 ${figure.photo} 下载到 ${IMG_DIR}/（例如 curl -L -o ${IMG_DIR}/fig-<短标识>.jpg "<URL>"），发布时用容器内路径 /app/images/<文件名>；可再配一张文字卡。`,
+      '     下载后确认文件是有效图片（file 命令 / 大小 >10KB），否则改用文字卡。',
     );
   } else {
     lines.push(`   • 没有真实照片，就用本地文字卡：node ${TEXTCARD} --text "<人物名或他的观点>" --sub "<一句小字>" --out ${IMG_DIR}/fig-<短标识>.png`);
@@ -176,21 +208,26 @@ export async function postNow({ codex, visibility = '仅自己可见', slotLabel
 
 async function tick({ codex, log }) {
   if (!XHS_AUTOPOST || ticking) return;
-  const h = new Date().getHours();
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
   const d = day();
-  const slot = XHS_AUTOPOST_PLAN.find((p) => p.hour === h);
-  if (!slot) return;
+  const slots = XHS_AUTOPOST_SLOTS;
+  const dayTypes = typesForDay(d, slots.length);
   const state = loadState();
   const done = state[d] || [];
-  if (done.includes(h)) return;
+  const idx = slots.findIndex((p) => !done.includes(slotKey(p)) && p.hour === h && m >= (p.minute || 0));
+  if (idx < 0) return;
+  const slot = slots[idx];
+  const key = slotKey(slot);
+  const type = planTypeFor(slot) || dayTypes[idx] || 'question';
   ticking = true;
   try {
-    const hh = String(h).padStart(2, '0');
-    const res = await post({ codex, log, visibility: XHS_AUTOPOST_VISIBILITY, slotLabel: `${hh}:00`, reason: 'schedule', type: slot.type });
+    const res = await post({ codex, log, visibility: XHS_AUTOPOST_VISIBILITY, slotLabel: key, reason: 'schedule', type });
     if (res.ok) {
-      state[d] = [...done, h];
-      state.history = [...(state.history || []).slice(-200), { date: d, hour: h, kw: res.kw, type: res.type }];
-      state.last = { date: d, hour: h, kw: res.kw, type: res.type, threadId: res.threadId, visibility: res.visibility, at: Date.now() };
+      state[d] = [...done, key];
+      state.history = [...(state.history || []).slice(-200), { date: d, hour: slot.hour, minute: slot.minute, kw: res.kw, type: res.type }];
+      state.last = { date: d, slot: key, kw: res.kw, type: res.type, threadId: res.threadId, visibility: res.visibility, at: Date.now() };
       if (res.type === 'figure') {
         try { writeFileSync(FIGURE_USED_FILE, [...readLines(FIGURE_USED_FILE), res.kw].join('\n') + '\n'); } catch {}
       }
@@ -207,14 +244,15 @@ export function startAutopost({ codex }) {
   t.unref?.();
   tick({ codex, log: console.log });
   const label = (x) => (x === 'ai' ? 'AI分享' : x === 'figure' ? '人物观点' : '提问帖');
-  console.log(`[autopost] 计划：${XHS_AUTOPOST_PLAN.map((p) => `${p.hour}:00 ${label(p.type)}`).join(' / ')}（${XHS_AUTOPOST_VISIBILITY}）· 提问帖避让最近 ${XHS_ROTATE_DAYS} 天同品类`);
+  console.log(`[autopost] 时段：${XHS_AUTOPOST_SLOTS.map(slotKey).join(' / ')} · 类型轮换：${(XHS_AUTOPOST_ROTATION || []).map(label).join(' / ')}（${XHS_AUTOPOST_VISIBILITY}）· 提问帖避让最近 ${XHS_ROTATE_DAYS} 天同品类`);
 }
 
 export function autopostMeta() {
   const state = loadState();
   return {
-    enabled: XHS_AUTOPOST, hours: XHS_AUTOPOST_HOURS, metric: XHS_AUTOPOST_METRIC,
-    plan: XHS_AUTOPOST_PLAN, visibility: XHS_AUTOPOST_VISIBILITY, rotateDays: XHS_ROTATE_DAYS,
+    enabled: XHS_AUTOPOST, metric: XHS_AUTOPOST_METRIC,
+    slots: XHS_AUTOPOST_SLOTS, rotation: XHS_AUTOPOST_ROTATION, plan: XHS_AUTOPOST_PLAN,
+    visibility: XHS_AUTOPOST_VISIBILITY, rotateDays: XHS_ROTATE_DAYS,
     figureTopicsFile: XHS_FIGURE_TOPICS_FILE,
     doneToday: state[day()] || [], last: state.last || null,
   };

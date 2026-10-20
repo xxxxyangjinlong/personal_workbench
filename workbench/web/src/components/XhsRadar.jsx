@@ -73,11 +73,12 @@ export default function XhsRadar({ onBack, onOpenThread }) {
 
       <div className="hscroll">
         {err && <div className="error pad">{err}</div>}
-        {ap.plan && (
+        {ap.slots && (
           <div className="hauto">
-            每日自动发：{(ap.plan || []).map((p) => `${p.hour}:00 ${p.type === 'ai' ? 'AI分享' : '提问帖'}`).join(' · ')}
+            每日自动发：{(ap.slots || []).map((p) => `${p.hour}:${String(p.minute || 0).padStart(2, '0')}`).join(' / ')}
+            · 类型每天轮换：{(ap.rotation || []).map((t) => (t === 'ai' ? 'AI分享' : t === 'figure' ? '人物观点' : '提问帖')).join(' / ')}
             {autoTop && <>（提问帖主题 <b>{autoTop.kw}</b>·{apLabel}第 1 名）</>}
-            · 今日 {(ap.doneToday || []).length}/{(ap.plan || []).length}
+            · 今日 {(ap.doneToday || []).length}/{(ap.slots || []).length}
           </div>
         )}
         {!latest && !data?.scanning && (
