@@ -111,6 +111,7 @@ export default function XhsRadar({ onBack, onOpenThread }) {
         <div className="hfoot-row">
           <button className="hfoot-btn" onClick={() => tryPost('question')} disabled={!!busy}>{busy === '__question' ? '发起中…' : '试发提问帖'}</button>
           <button className="hfoot-btn" onClick={() => tryPost('ai')} disabled={!!busy}>{busy === '__ai' ? '发起中…' : '试发 AI 分享'}</button>
+          <button className="hfoot-btn" onClick={() => tryPost('figure')} disabled={!!busy}>{busy === '__figure' ? '发起中…' : '试发人物观点'}</button>
         </div>
       </div>
     </div>

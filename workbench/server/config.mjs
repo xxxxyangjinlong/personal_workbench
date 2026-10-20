@@ -56,3 +56,8 @@ export const EXTRA_SERVICES = [
 export const PINNED_SESSIONS = [
   { label: '项目发布', threadId: process.env.PIN_DEPLOY_THREAD || '01a152bf-23d4-7f43-b19d-eed60150bbb6' },
 ];
+
+// 「热点人物观点」帖的人物清单（每行：名字 :: 观点/线索 :: 图片URL或本地路径(可空)，# 开头为注释）
+export const XHS_FIGURE_TOPICS_FILE = process.env.XHS_FIGURE_TOPICS_FILE || path.join(XHS_WORK_CWD, 'figure-topics.txt');
+// 提问帖「同品类隔天不重复」：避开最近 N 天（不含今天）已用过的品类
+export const XHS_ROTATE_DAYS = Number(process.env.XHS_ROTATE_DAYS || 2);
