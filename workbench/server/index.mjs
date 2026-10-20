@@ -45,15 +45,22 @@ function broadcast(event, data) {
 }
 // 运行中会话跟踪（收到 turn 生命周期通知时维护）
 const runningThreads = new Map(); // threadId -> 最近活动时间
+const activeTurns = new Map();    // threadId -> 进行中的 turnId（turn/interrupt 需要 turnId）
 function noteThreadActivity(m) {
   const p = m.params || {};
   const tid = p.threadId;
   if (!tid) return;
   // 只有「回合」（turn）生命周期才能代表任务真的在执行；
   // thread/status/changed 的 active 只表示会话被加载/挂载，不能当运行中。
-  if (m.method === 'turn/started') runningThreads.set(tid, Date.now());
-  else if (m.method === 'turn/completed' || m.method === 'turn/failed' || m.method === 'turn/interrupted') runningThreads.delete(tid);
-  else if (m.method === 'thread/status/changed' && p.status && p.status.type === 'idle') runningThreads.delete(tid); // 安全网：明确的空闲才清除
+  if (m.method === 'turn/started') {
+    runningThreads.set(tid, Date.now());
+    if (p.turn && p.turn.id) activeTurns.set(tid, p.turn.id);
+  } else if (m.method === 'turn/completed' || m.method === 'turn/failed' || m.method === 'turn/interrupted') {
+    runningThreads.delete(tid);
+    activeTurns.delete(tid);
+  } else if (m.method === 'thread/status/changed' && p.status && p.status.type === 'idle') {
+    runningThreads.delete(tid); // 安全网：明确的空闲才清除
+  }
 }
 codex.on('notification', (m) => { noteThreadActivity(m); broadcast('notification', m); });
 codex.on('serverRequest', (m) => broadcast('serverRequest', m));
@@ -214,7 +221,9 @@ app.post('/api/threads/:id/turns', auth, async (req, res) => {
     await codex.ensureReady();
     const { text, images } = req.body || {};
     if (!text && !(Array.isArray(images) && images.length)) return res.status(400).json({ error: 'text or images required' });
-    res.json(await startTurn(req.params.id, req.body));
+    const r = await startTurn(req.params.id, req.body);
+    if (r && r.turn && r.turn.id) activeTurns.set(req.params.id, r.turn.id);
+    res.json(r);
   } catch (err) {
     if (err.code === 'thread_locked') return res.status(409).json({ error: 'thread_locked', message: err.message });
     res.status(500).json({ error: err.message });
@@ -254,8 +263,24 @@ app.post('/api/threads/:id/archive', auth, async (req, res) => {
 });
 
 app.post('/api/threads/:id/interrupt', auth, async (req, res) => {
-  try { await codex.ensureReady(); res.json(await codex.request('turn/interrupt', { threadId: req.params.id })); }
-  catch (err) { res.status(500).json({ error: err.message }); }
+  try {
+    await codex.ensureReady();
+    const threadId = req.params.id;
+    // turn/interrupt 必须带 turnId：优先用通知/发起时记录的，其次回退查最新进行中的回合
+    let turnId = activeTurns.get(threadId);
+    if (!turnId) {
+      try {
+        const r = await codex.request('thread/turns/list', { threadId, limit: 5, sortDirection: 'desc', itemsView: 'full' });
+        const list = r.data || [];
+        const act = list.find((t) => t.status === 'inProgress');
+        turnId = act ? act.id : undefined;
+      } catch {}
+    }
+    if (!turnId) return res.status(409).json({ error: 'no_active_turn', message: '该会话当前没有进行中的回合' });
+    const out = await codex.request('turn/interrupt', { threadId, turnId });
+    activeTurns.delete(threadId);
+    res.json(out);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/respond', auth, (req, res) => {
