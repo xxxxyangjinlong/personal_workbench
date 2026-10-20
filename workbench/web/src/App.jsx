@@ -7,6 +7,8 @@ import Desktop from './components/Desktop.jsx';
 import Sessions from './components/Sessions.jsx';
 import ThreadView from './components/ThreadView.jsx';
 import External from './components/External.jsx';
+import Hotspot from './components/Hotspot.jsx';
+import XhsRadar from './components/XhsRadar.jsx';
 
 function useWide(query = '(min-width: 900px)') {
   const [wide, setWide] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : false));
@@ -22,7 +24,13 @@ function useWide(query = '(min-width: 900px)') {
 
 export default function App() {
   const [token, setTok] = useState(getToken());
-  const [view, setView] = useState({ name: 'home' });
+  const [view, setView] = useState(() => {
+    try {
+      const v = new URLSearchParams(location.search).get('view');
+      if (v === 'hotspot' || v === 'codex' || v === 'xhs') return { name: v };
+    } catch {}
+    return { name: 'home' };
+  });
   const [models, setModels] = useState([]);
   const wide = useWide();
 
@@ -51,6 +59,8 @@ export default function App() {
           onOpenCodex={() => setView({ name: 'codex' })}
           onOpenThread={(id) => setView({ name: 'thread', id, from: 'home' })}
           onOpenService={(s) => setView({ name: 'external', service: s })}
+          onOpenHotspot={() => setView({ name: 'hotspot' })}
+          onOpenRadar={() => setView({ name: 'xhs' })}
           onLogout={logout}
         />
       )}
@@ -61,8 +71,20 @@ export default function App() {
         <ThreadView
           id={view.id}
           models={modelIds}
-          onBack={() => setView(view.from === 'home' ? { name: 'home' } : { name: 'codex' })}
+          onBack={() => setView(view.from === 'home' ? { name: 'home' } : (view.from === 'hotspot' || view.from === 'xhs') ? { name: view.from } : { name: 'codex' })}
           onOpenThread={(nid) => setView({ name: 'thread', id: nid, from: view.from || 'codex' })}
+        />
+      )}
+      {view.name === 'hotspot' && (
+        <Hotspot
+          onBack={() => setView({ name: 'home' })}
+          onOpenThread={(id) => setView({ name: 'thread', id, from: 'hotspot' })}
+        />
+      )}
+      {view.name === 'xhs' && (
+        <XhsRadar
+          onBack={() => setView({ name: 'home' })}
+          onOpenThread={(id) => setView({ name: 'thread', id, from: 'xhs' })}
         />
       )}
       {view.name === 'external' && <External service={view.service} onBack={() => setView({ name: 'home' })} />}

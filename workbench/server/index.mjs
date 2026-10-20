@@ -9,9 +9,12 @@ import { randomUUID } from 'node:crypto';
 import { CodexClient } from './codex-client.mjs';
 import { startTtyd } from './terminal.mjs';
 import { makeProxyServer } from './proxy.mjs';
+import { getHotspots } from './hotspot.mjs';
+import { runScan as xhsRunScan, getLatestSnapshot, radarMeta, startScheduler as startXhsRadar } from './xhs-radar.mjs';
+import { autopostMeta, postNow as xhsPostNow, startAutopost } from './xhs-autopost.mjs';
 import {
   CODEX_BIN, PORT, ACCESS_TOKEN, DEFAULT_CWD, DEFAULT_SANDBOX, DEFAULT_APPROVAL, DEFAULT_MODEL,
-  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS,
+  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS, HOTSPOT_CWD,
 } from './config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -124,6 +127,30 @@ app.get('/api/services', auth, async (_req, res) => {
 
 app.get('/api/running', auth, (_req, res) => {
   res.json({ running: [...runningThreads.keys()] });
+});
+
+// ---------- 热点雷达 ----------
+app.get('/api/hotspot', auth, async (req, res) => {
+  try {
+    const data = await getHotspots({ refresh: req.query.refresh === '1' });
+    res.json({ ...data, cwd: HOTSPOT_CWD });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------- 小红书热门雷达 ----------
+app.get('/api/xhs-radar', auth, (_req, res) => {
+  res.json({ latest: getLatestSnapshot(), cwd: HOTSPOT_CWD, autopost: autopostMeta(), ...radarMeta() });
+});
+app.post('/api/xhs-radar/run', auth, (_req, res) => {
+  xhsRunScan({ reason: 'manual' }).catch(() => {});
+  res.json({ ok: true, scanning: true });
+});
+app.post('/api/xhs-radar/autopost', auth, async (req, res) => {
+  try {
+    const visibility = (req.body && req.body.visibility) || '仅自己可见';
+    const r = await xhsPostNow({ codex, visibility });
+    res.json({ ok: true, ...r });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
 app.get('/api/loaded', auth, async (_req, res) => {
@@ -391,6 +418,9 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`terminal: ${TERMINAL_ENABLED ? `${TTYD_BASE}/ -> 127.0.0.1:${TTYD_PORT} (tmux: ${TMUX_SESSION})` : 'disabled'}`);
   console.log(`access token: ${ACCESS_TOKEN}`);
 });
+
+startXhsRadar();
+startAutopost({ codex });
 
 // ---------- graceful shutdown（避免热重启/退出时残留 app-server 子进程）----------
 let _shuttingDown = false;

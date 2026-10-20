@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../api';
 import ThreadView from './ThreadView.jsx';
 import External from './External.jsx';
+import Hotspot from './Hotspot.jsx';
+import XhsRadar from './XhsRadar.jsx';
 
 function relTime(sec) {
   if (!sec) return '';
@@ -83,6 +85,22 @@ function Overview({ threads, running, services, pinned, recent, onPick }) {
 
       <div className="dsec-title">快捷入口</div>
       <div className="dquick">
+        <button className="dquickcard" onClick={() => onPick({ type: 'xhs' })}>
+          <span className="dq-ico">🍠</span>
+          <span className="dq-body">
+            <span className="dq-name">小红书热门</span>
+            <span className="dq-sub">各品类热门笔记榜 · 一键出选题</span>
+          </span>
+          <span className="dq-go">→</span>
+        </button>
+        <button className="dquickcard" onClick={() => onPick({ type: 'hotspot' })}>
+          <span className="dq-ico">🔥</span>
+          <span className="dq-body">
+            <span className="dq-name">热点雷达</span>
+            <span className="dq-sub">各平台热搜 · 生成小红书草稿</span>
+          </span>
+          <span className="dq-go">→</span>
+        </button>
         {pinned.map((p) => (
           <button key={p.threadId} className="dquickcard" onClick={() => onPick({ type: 'thread', id: p.threadId })}>
             <span className="dq-ico">🚀</span>
@@ -152,11 +170,13 @@ export default function Desktop({ models, onLogout }) {
 
   function titleFor(item) {
     if (item.type === 'external') return item.service?.label || '服务';
+    if (item.type === 'hotspot') return '热点雷达';
+    if (item.type === 'xhs') return '小红书热门';
     const t = threads.find((x) => x.id === item.id);
     return t ? (t.name || (t.preview || '').slice(0, 24) || '会话') : '会话';
   }
   function open(item) {
-    const key = item.type === 'thread' ? `thread:${item.id}` : `svc:${item.service.id}`;
+    const key = item.type === 'thread' ? `thread:${item.id}` : item.type === 'hotspot' ? 'app:hotspot' : item.type === 'xhs' ? 'app:xhs' : `svc:${item.service.id}`;
     setTabs((prev) => (prev.some((t) => t.key === key) ? prev : [...prev, { key, ...item, title: titleFor(item) }]));
     setActive(key);
   }
@@ -195,6 +215,16 @@ export default function Desktop({ models, onLogout }) {
         <div className="dbrand" onClick={() => setActive(null)} title="回到概览" style={{ cursor: 'pointer' }}>🧭 桌面工作台</div>
 
         <div className="dnav">
+          <button className={`dnavitem ${active === 'app:xhs' ? 'on' : ''}`}
+            onClick={() => open({ type: 'xhs' })}>
+            <span className="di">🍠</span>
+            <span className="dlbl">小红书热门</span>
+          </button>
+          <button className={`dnavitem ${active === 'app:hotspot' ? 'on' : ''}`}
+            onClick={() => open({ type: 'hotspot' })}>
+            <span className="di">🔥</span>
+            <span className="dlbl">热点雷达</span>
+          </button>
           {pinned.map((p) => (
             <button key={p.threadId} className={`dnavitem ${active === `thread:${p.threadId}` ? 'on' : ''}`}
               onClick={() => open({ type: 'thread', id: p.threadId })}>
@@ -269,6 +299,10 @@ export default function Desktop({ models, onLogout }) {
               {t.type === 'thread'
                 ? <ThreadView id={t.id} models={models} onBack={() => closeTab(t.key)}
                     onOpenThread={(id) => open({ type: 'thread', id })} />
+                : t.type === 'hotspot'
+                ? <Hotspot onBack={() => closeTab(t.key)} onOpenThread={(id) => open({ type: 'thread', id })} />
+                : t.type === 'xhs'
+                ? <XhsRadar onBack={() => closeTab(t.key)} onOpenThread={(id) => open({ type: 'thread', id })} />
                 : <External service={t.service} onBack={() => closeTab(t.key)} />}
             </div>
           ))}

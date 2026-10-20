@@ -420,3 +420,43 @@ textarea { resize: none; max-height: 40vh; }
 .md th { background: var(--card); }
 .md img { max-width: 100%; border-radius: 10px; }
 .msg.user .md pre { background: #23253a; }
+
+/* ================= 热点雷达 ================= */
+.hchips { flex: none; display: flex; gap: 8px; padding: 10px 14px; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.hchip { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--fg); border: 1px solid transparent; border-radius: 999px; padding: 7px 12px; font-size: 13px; }
+.hchip.on { background: var(--accent-soft, #eef0ff); color: var(--accent-ink, #3b3ed6); font-weight: 600; }
+.hchip.off { opacity: .5; }
+.hchip-ico { font-size: 12px; }
+.hchip-n { font-size: 11px; color: var(--muted); background: rgba(0,0,0,.05); border-radius: 999px; padding: 0 6px; }
+.hchip.on .hchip-n { color: var(--accent-ink, #3b3ed6); background: rgba(59,62,214,.12); }
+
+.hscroll { flex: 1; min-height: 0; overflow: auto; }
+.hlist { list-style: none; margin: 0; padding: 6px 8px 14px; }
+.hitem { display: flex; align-items: center; gap: 10px; padding: 11px 10px; }
+.hitem:active { background: var(--card); }
+.hitem + .hitem { border-top: 1px solid var(--line); }
+.hrank { flex: none; width: 22px; text-align: center; font-size: 14px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hrank.top1 { color: #e5484d; }
+.hrank.top2 { color: #f0883e; }
+.hrank.top3 { color: #d19a00; }
+.hbody { flex: 1; min-width: 0; }
+.htitle { display: block; color: var(--fg); text-decoration: none; font-size: 15px; line-height: 1.35; }
+.htitle:hover { color: var(--accent); }
+.hmeta { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+.hhot { color: #e5484d; }
+.hlabel { background: rgba(229,72,77,.1); color: #e5484d; border-radius: 4px; padding: 0 5px; }
+.hgen { flex: none; background: var(--accent-soft, #eef0ff); color: var(--accent-ink, #3b3ed6); border-radius: 10px; padding: 8px 10px; font-size: 15px; }
+.hgen:disabled { opacity: .5; }
+.hfoot { flex: none; border-top: 1px solid var(--line); padding: 8px 14px calc(8px + var(--safe-bottom)); font-size: 11.5px; color: var(--muted); text-align: center; }
+
+/* 小红书热门雷达 */
+.hmetric { margin-left: 8px; font-size: 13px; font-weight: 700; color: var(--accent-ink, #3b3ed6); }
+.htop { margin-top: 3px; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 小红书热门：自动发帖栏 */
+.hauto { padding: 9px 14px; font-size: 12px; color: var(--muted); background: var(--card); border-bottom: 1px solid var(--line); }
+.hauto b { color: var(--accent-ink, #3b3ed6); }
+.hfoot { display: flex; flex-direction: column; gap: 8px; }
+.hfoot-line { font-size: 11.5px; }
+.hfoot-btn { width: 100%; background: var(--accent-soft, #eef0ff); color: var(--accent-ink, #3b3ed6); border-radius: 10px; padding: 10px; font-size: 13px; }
+.hfoot-btn:disabled { opacity: .5; }
