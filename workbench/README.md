@@ -38,6 +38,7 @@ npm run dev
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT` | 8080 | 监听端口 |
+| `APP_SERVER_WS` | 空 | 设为 `ws://127.0.0.1:8123` 时，网关**连接长活 app-server**（而非自起 stdio 子进程）；这样网关重启/热重载都不会中断正在跑的任务。留空则回退为自起子进程 |
 | `ACCESS_TOKEN` | codex-mobile | 登录令牌（**务必改**） |
 | `CODEX_BIN` | 自动探测 | codex 可执行文件路径 |
 | `DEFAULT_CWD` | `$HOME` | 新任务默认工作目录 |
@@ -88,8 +89,18 @@ Codex 的会话正文存在本机共享库（`~/.codex/state_5.sqlite` + `thread
 （`~/.codex/thread-writer-locks/<threadId>.lock`）。多个 app-server 同时存在时，谁加载了会话，
 另一方就读不到最新 / 写不进去 —— 表现为「不同步 / 会话正在电脑端使用中」。
 
-网关启动 app-server 时默认带上 `-c thread_unload_delay_secs=30`，
-让会话空闲 30 秒后**自动卸载、释放写锁**，避免长期独占。
+本工作台使用一个 **launchd 托管的长活 app-server**（`com.yangjinlong.codex-appserver`）：
+
+```
+codex app-server -c thread_unload_delay_secs=30 --listen ws://127.0.0.1:8123
+```
+
+网关通过 `APP_SERVER_WS=ws://127.0.0.1:8123` 以 WebSocket 连上去。好处是
+**任务的执行发生在 app-server 进程里，网关重启/热重载（`node --watch`）只断一下 WS，任务照常跑完**。
+`thread_unload_delay_secs=30` 让会话空闲 30 秒后**自动卸载、释放写锁**，避免长期独占导致不同步。
+
+> 不用长活服务时（未设 `APP_SERVER_WS`），网关会自起 `codex app-server` 子进程并带上同一个 `-c`；
+> 但那种模式下**网关一重启，子进程即被杀、正在跑的任务会中断**。
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |

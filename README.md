@@ -9,6 +9,7 @@
 | 服务 | 目录 | 端口 | 说明 |
 | --- | --- | --- | --- |
 | 网关 + 前端 | `workbench/` | **8080** | Node(Express) 网关 + React(Vite)，对外只暴露这一个端口 |
+| Codex app-server | 常驻进程（launchd 托管） | 8123 | `codex app-server --listen ws://127.0.0.1:8123`，**长活**；网关用 WS 连它，网关重启不影响正在跑的任务 |
 | 数据查询 | `services/db-query/` | 8777 | Python，跨项目数据库自然语言查询 |
 | 发布 / 服务器终端 | `services/deploy-tools/` | 8778 | Python，一句话发布 + Web 终端 |
 
@@ -48,6 +49,7 @@ npm run build        # 产出 web/dist（网关直接托管）
 ```bash
 ./scripts/start.sh     # 启动全部（网关 8080 + 数据查询 8777 + 发布/终端 8778）
 ./scripts/status.sh    # 查看状态、本机 IP、手机访问地址
+./scripts/restart.sh   # 只重启网关（不会中断正在跑的任务）
 ./scripts/stop.sh      # 停止全部
 ```
 
@@ -85,14 +87,25 @@ cd services/deploy-tools && ./start.sh 8778    # 8778
 
 ## 开机 / 常驻自启（launchd）
 
-网关由 `~/Library/LaunchAgents/com.yangjinlong.codex-mobile.plist` 托管，日志在
-`workbench/logs/`。改动后重载：
+两个常驻任务由 `~/Library/LaunchAgents/` 下的 plist 托管，日志都在 `workbench/logs/`：
+（仓库内 `launchd/` 目录保存了这两个 plist 的副本，便于备份/复现。）
+
+| label | 作用 |
+| --- | --- |
+| `com.yangjinlong.codex-appserver` | 长活 Codex app-server（8123，KeepAlive） |
+| `com.yangjinlong.codex-mobile` | 网关（8080，`node --watch`） |
+
+改动后重载（网关可直接用 `./scripts/restart.sh`）：
 
 ```bash
 U=$(id -u)
-launchctl bootout gui/$U/com.yangjinlong.codex-mobile 2>/dev/null
-launchctl bootstrap gui/$U ~/Library/LaunchAgents/com.yangjinlong.codex-mobile.plist
+for L in com.yangjinlong.codex-appserver com.yangjinlong.codex-mobile; do
+  launchctl bootout gui/$U/$L 2>/dev/null
+  launchctl bootstrap gui/$U ~/Library/LaunchAgents/$L.plist
+done
 ```
+
+> `bootstrap` 有时首报 `5: Input/output error` 但其实已启动；若 8080 未就绪，重跑一次即可。
 
 > plist 里写死了本仓库路径；**移动/重命名本仓库目录后，务必同步修改 plist 里的路径**，否则网关起不来。
 
@@ -111,6 +124,7 @@ launchctl bootstrap gui/$U ~/Library/LaunchAgents/com.yangjinlong.codex-mobile.p
 
 ## 常见问题
 
+- **改代码 / 重启网关会不会中断正在跑的任务**：不会。任务在**长活 app-server** 进程里执行（launchd 托管 `com.yangjinlong.codex-appserver`，端口 8123），网关只是它的客户端；重启网关仅断开并重连 WS，任务照常跑完。重启网关用 `./scripts/restart.sh`。
 - **手机端与电脑端会话「不同步 / 正在电脑端使用中」**：Codex 会话在某个 app-server 里会驻留内存副本并持有独占写锁。
   网关启动 app-server 时默认带 `-c thread_unload_delay_secs=30`，会话空闲 30 秒后自动卸载、释放锁。
   诊断：`GET /api/loaded`（当前加载的会话 id）。

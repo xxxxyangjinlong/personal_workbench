@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.yangjinlong.codex-appserver</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex</string>
+		<string>app-server</string>
+		<string>-c</string>
+		<string>thread_unload_delay_secs=30</string>
+		<string>--listen</string>
+		<string>ws://127.0.0.1:8123</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/yangjinlong</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/yangjinlong/workProjects/personal-workbench/workbench/logs/appserver.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/yangjinlong/workProjects/personal-workbench/workbench/logs/appserver.err.log</string>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+</dict>
+</plist>

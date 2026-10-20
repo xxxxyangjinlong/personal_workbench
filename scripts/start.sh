@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
-# 一键启动个人工作台全部服务：网关(8080) + 数据查询(8777) + 发布/终端(8778)
+# 一键启动个人工作台全部服务：长活 app-server + 网关(8080) + 数据查询(8777) + 发布/终端(8778)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-LBL="com.yangjinlong.codex-mobile"
-PLIST="$HOME/Library/LaunchAgents/$LBL.plist"
-UID_NUM="$(id -u)"
+U="$(id -u)"
+AGENT="$HOME/Library/LaunchAgents"
 
 port_up() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+loaded()  { launchctl print "gui/$U/$1" >/dev/null 2>&1; }
+boot()    { # label
+  loaded "$1" && { echo "    已在运行"; return; }
+  local i; for i in 1 2 3 4 5; do
+    launchctl bootstrap "gui/$U" "$AGENT/$1.plist" 2>/dev/null && break
+    sleep 1
+  done
+}
+
+echo "==> Codex app-server (8123)"
+boot com.yangjinlong.codex-appserver
 
 echo "==> 数据查询 (8777)"
 if port_up 8777; then echo "    已在运行"; else ( cd "$ROOT/services/db-query" && ./start.sh -d 8777 ); sleep 1; fi
@@ -17,10 +27,8 @@ if port_up 8778; then echo "    已在运行"; else ( cd "$ROOT/services/deploy-
 echo "==> 网关 (8080)"
 if port_up 8080; then
   echo "    已在运行"
-elif [ -f "$PLIST" ]; then
-  echo "    通过 launchd 启动"
-  launchctl bootstrap "gui/$UID_NUM" "$PLIST" >/dev/null 2>&1 \
-    || launchctl kickstart -k "gui/$UID_NUM/$LBL" >/dev/null 2>&1 || true
+elif [ -f "$AGENT/com.yangjinlong.codex-mobile.plist" ]; then
+  boot com.yangjinlong.codex-mobile
   sleep 3
 else
   echo "    直接启动（无 launchd 托管）"
