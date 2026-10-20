@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+# 运行时数据 / 日志
+logs/
+data/
+*.log
+server.pid
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# 密钥
+.env
+*.secret
+.DS_Store
+dist/

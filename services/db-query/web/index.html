@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>数据库自然语言查询</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1b2230; --bd:#242c38;
+    --fg:#e6edf3; --muted:#8b98a9; --acc:#4c8dff; --acc2:#6ee7b7;
+    --warn:#f4b942; --err:#ff6b6b; --ok:#3fb950;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--fg);height:100vh;overflow:hidden}
+  .app{display:flex;height:100vh}
+  /* sidebar */
+  .side{width:330px;min-width:330px;background:var(--panel);border-right:1px solid var(--bd);
+    display:flex;flex-direction:column}
+  .side .hd{padding:14px 16px 10px;border-bottom:1px solid var(--bd)}
+  .side .hd h1{margin:0 0 2px;font-size:15px;font-weight:600}
+  .side .hd .sub{color:var(--muted);font-size:11px;word-break:break-all}
+  .search{margin:10px 12px;padding:7px 10px;border-radius:8px;background:var(--panel2);
+    border:1px solid var(--bd);color:var(--fg);outline:none;width:calc(100% - 24px)}
+  .search:focus{border-color:var(--acc)}
+  .tree{overflow:auto;flex:1;padding:4px 8px 20px}
+  .proj{margin-bottom:2px}
+  .proj>.row{padding:7px 8px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:7px;font-weight:600}
+  .proj>.row:hover{background:var(--panel2)}
+  .prof{margin-left:14px}
+  .prof>.row{padding:5px 8px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px}
+  .prof>.row:hover{background:var(--panel2)}
+  .items{margin-left:14px;display:none}
+  .prof.open>.items{display:block}
+  .proj>.prof{display:none}
+  .proj.open>.prof{display:block}
+  .ds{padding:6px 9px;border-radius:6px;cursor:pointer;font-size:12.5px;display:flex;gap:6px;align-items:center;border:1px solid transparent}
+  .ds:hover{background:var(--panel2)}
+  .ds.sel{background:#1d2b45;border-color:var(--acc)}
+  .badge{font-size:10px;padding:1px 5px;border-radius:5px;background:#22303f;color:var(--muted);white-space:nowrap}
+  .badge.mysql{background:#0d2f22;color:#57d1a0}
+  .badge.dm{background:#2f2410;color:#f0b653}
+  .badge.oracle{background:#331414;color:#ff8a8a}
+  .badge.postgresql{background:#132a3a;color:#6cc4f0}
+  .badge.hive2{background:#2b1a33;color:#cf9bf0}
+  .badge.h2{background:#1a2330;color:#9db4d0}
+  .ds .meta{color:var(--muted);font-size:11px;margin-left:auto;white-space:nowrap}
+  .caret{transition:transform .15s;display:inline-block;font-size:10px;color:var(--muted)}
+  .open>.row .caret{transform:rotate(90deg)}
+  /* main */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{padding:12px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:14px;background:var(--panel)}
+  .conn{display:flex;align-items:center;gap:9px;font-size:13px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#555}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.off{background:var(--err)}
+  .conn .t{font-weight:600}
+  .conn .d{color:var(--muted);font-size:12px}
+  .topbar .spacer{flex:1}
+  .tbtn{padding:6px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--panel2);color:var(--fg);cursor:pointer;font-size:12.5px;white-space:nowrap}
+  .tbtn:hover{border-color:var(--acc)}
+  .body{flex:1;display:flex;min-height:0}
+  .work{flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto}
+  .side-tables{width:250px;min-width:250px;border-left:1px solid var(--bd);background:var(--panel);overflow:auto;display:flex;flex-direction:column}
+  .side-tables .th{padding:11px 14px;border-bottom:1px solid var(--bd);font-size:12.5px;color:var(--muted);display:flex;gap:8px;align-items:center}
+  .schemaSel{margin-left:auto;background:var(--panel2);color:var(--fg);border:1px solid var(--bd);border-radius:6px;font-size:11.5px;padding:3px 6px;max-width:140px;display:none}
+  .tlist{padding:6px 8px;overflow:auto}
+  .tlist .t{padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12.5px;color:#c6d2e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tlist .t:hover{background:var(--panel2);color:#fff}
+  .tlist .empty{color:var(--muted);font-size:12px;padding:8px}
+  /* editor */
+  .ed{padding:16px 18px;border-bottom:1px solid var(--bd)}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tab{padding:6px 14px;border-radius:8px 8px 0 0;cursor:pointer;color:var(--muted);font-size:13px;border:1px solid transparent;border-bottom:none}
+  .tab.act{color:var(--fg);background:var(--panel2);border-color:var(--bd)}
+  .ta{width:100%;min-height:78px;resize:vertical;padding:11px 13px;border-radius:10px;background:var(--panel2);
+    border:1px solid var(--bd);color:var(--fg);font:13.5px/1.55 ui-monospace,Menlo,Consolas,monospace;outline:none}
+  .ta:focus{border-color:var(--acc)}
+  .rowctl{display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap}
+  .btn{padding:8px 18px;border-radius:9px;border:none;background:var(--acc);color:#fff;cursor:pointer;font-weight:600;font-size:13px}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--bd);color:var(--fg);font-weight:500}
+  .chk{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px;cursor:pointer}
+  input[type=number]{width:74px;padding:5px 8px;border-radius:7px;background:var(--panel2);border:1px solid var(--bd);color:var(--fg);outline:none}
+  /* output */
+  .out{padding:16px 18px;flex:1}
+  .sqlbox{background:#0b0f15;border:1px solid var(--bd);border-radius:9px;padding:11px 13px;font:12.8px/1.6 ui-monospace,Menlo,Consolas,monospace;
+    color:#b7e0ff;white-space:pre-wrap;word-break:break-word;margin-bottom:12px}
+  .explain{color:var(--muted);font-size:12.5px;margin:-4px 0 12px}
+  .summary{background:#10241a;border:1px solid #1d4d33;border-radius:9px;padding:11px 14px;margin-bottom:12px;font-size:13.3px;white-space:pre-wrap}
+  .summary b{color:var(--acc2)}
+  .reswrap{overflow:auto;border:1px solid var(--bd);border-radius:9px}
+  table{border-collapse:collapse;width:100%;font-size:12.8px}
+  th,td{padding:7px 11px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis}
+  th{background:var(--panel2);position:sticky;top:0;color:#c6d2e0;font-weight:600}
+  tr:hover td{background:#141b25}
+  td.null{color:var(--muted);font-style:italic}
+  .stat{color:var(--muted);font-size:12px;margin:8px 2px 0}
+  .err{background:#2a1417;border:1px solid #5c2529;color:#ffb4b4;border-radius:9px;padding:11px 14px;font-size:13px;white-space:pre-wrap}
+  .hint{color:var(--muted);text-align:center;padding:60px 20px;font-size:13.5px}
+  .empty-main{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)}
+  .spin{width:14px;height:14px;border:2px solid #4c8dff55;border-top-color:var(--acc);border-radius:50%;display:inline-block;animation:sp .7s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  /* modal */
+  .mask{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:20}
+  .mask.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--bd);border-radius:12px;width:min(560px,92vw);max-height:80vh;display:flex;flex-direction:column}
+  .modal h3{margin:0;padding:14px 16px;border-bottom:1px solid var(--bd);font-size:14px}
+  .modal .c{padding:12px 16px;overflow:auto}
+  .modal .c table{font-size:12.5px}
+  .x{padding:10px 16px;border-top:1px solid var(--bd);text-align:right}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#2b3543;border-radius:6px}
+  ::-webkit-scrollbar-thumb:hover{background:#3a4658}
+
+  #sideToggle{display:none}
+  .chev{display:none;color:var(--muted);font-size:10px;margin-left:2px;transition:transform .15s}
+  .connPop{display:none;background:var(--panel);border-bottom:1px solid var(--bd);padding:11px 16px;font-size:13px}
+  .connPop.on{display:block}
+  .connPop .r{display:flex;gap:10px;padding:3px 0;line-height:1.45}
+  .connPop .r .k{color:var(--muted);flex:0 0 58px}
+  .connPop .r .v{word-break:break-all}
+  .side-tables .th .tlistCaret{display:none}
+  .sideMask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:39;display:none}
+
+  /* ---- mobile ---- */
+  @media (max-width: 860px){
+    body{height:auto;min-height:100dvh;overflow:auto;overflow-x:hidden;-webkit-text-size-adjust:100%}
+    .app{display:block;height:auto;min-height:100dvh}
+
+    /* 侧边栏 -> 抽屉 */
+    .side{position:fixed;z-index:40;top:0;left:0;bottom:0;height:100dvh;
+      width:86vw;max-width:360px;min-width:0;
+      border-right:1px solid var(--bd);border-bottom:none;
+      transform:translateX(-102%);transition:transform .22s ease;
+      box-shadow:8px 0 30px rgba(0,0,0,.5)}
+    .side.open{transform:none}
+    .sideMask{display:block;opacity:0;visibility:hidden;transition:opacity .22s}
+    .sideMask.on{opacity:1;visibility:visible}
+    .side .hd{padding:14px 16px 10px}
+    .search{padding:10px 12px;font-size:15px;width:calc(100% - 24px)}
+    .proj>.row{padding:9px 8px}
+    .prof>.row{padding:8px 8px}
+    .ds{padding:9px 9px}
+    #sideToggle{display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1}
+
+    .main{min-height:100dvh;display:flex;flex-direction:column}
+    .topbar{padding:10px 12px;gap:9px;flex-wrap:nowrap;position:sticky;top:0;z-index:10}
+    .conn{flex:1 1 auto;min-width:0;cursor:pointer}
+    .chev{display:inline-block}
+    .conn.pop .chev{transform:rotate(180deg)}
+    .conn .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .conn .d{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52vw}
+
+    .body{flex-direction:column;flex:1;min-height:0}
+    .work{overflow:visible;width:100%;max-width:100%;flex:1}
+    .empty-main{flex-direction:column;padding:0 16px;min-height:60vh}
+    .empty-main .hint{width:100%;max-width:100%;white-space:normal;word-break:break-word}
+
+    /* 表面板 -> 可折叠 */
+    .side-tables{width:auto;min-width:0;max-height:none;border-left:none;border-top:1px solid var(--bd);flex:0 0 auto}
+    .side-tables .th{cursor:pointer;-webkit-user-select:none;user-select:none}
+    .side-tables .th .tlistCaret{display:inline-block;font-size:10px;color:var(--muted);transition:transform .15s}
+    .side-tables.open .th .tlistCaret{transform:rotate(90deg)}
+    .side-tables .tlist{display:none;max-height:38vh;overflow:auto}
+    .side-tables.open .tlist{display:block}
+
+    .ed{padding:12px 14px}
+    .out{padding:12px 14px}
+    .ta{min-height:92px;font-size:15px}
+    .tabs{margin-bottom:8px}
+    .tab{padding:9px 16px}
+    .btn{padding:11px 20px;min-height:44px;font-size:14px}
+    .tbtn{padding:9px 13px;min-height:40px}
+    .rowctl{gap:12px}
+    .chk{font-size:13px}
+    input[type=number]{width:70px;padding:8px 9px}
+    th,td{max-width:200px;padding:9px 11px}
+    .sqlbox{font-size:12.5px}
+    .hint{padding:40px 18px}
+    .modal{width:96vw;max-height:86vh}
+  }
+  @media (max-width: 420px){
+    .conn .d{max-width:40vw}
+    .tab{padding:8px 12px;font-size:12.5px}
+    .btn{width:100%}
+    .rowctl{gap:10px}
+  }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="hd">
+      <h1>数据库查询</h1>
+      <div class="sub" id="rootPath">加载中…</div>
+    </div>
+    <input class="search" id="search" placeholder="搜索项目 / 环境 / 库名 / 主机…" />
+    <div class="tree" id="tree"></div>
+    <div class="nodb" id="nodb"></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="tbtn" id="sideToggle" title="选择数据源">☰</button>
+      <div class="conn" id="conn"><span class="dot" id="dot"></span>
+        <div><div class="t" id="connTitle">未选择数据源</div><div class="d" id="connDesc">请在左侧选择</div></div>
+        <span class="chev" id="connChev">▾</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="tbtn" id="refreshBtn">重新扫描</button>
+    </div>
+    <div class="connPop" id="connPop"></div>
+
+    <div class="body">
+      <div class="work" id="work">
+        <div class="empty-main"><div class="hint">👈 先在左侧选择「项目 → 配置 → 数据库」，然后用自然语言提问</div></div>
+      </div>
+      <div class="side-tables">
+        <div class="th"><span class="tlistCaret">▶</span><span>表</span><span class="badge" id="tableCount">0</span><select id="schemaSel" class="schemaSel"></select></div>
+        <div class="tlist" id="tlist"><div class="empty">未连接</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="sideMask" id="sideMask"></div>
+
+<div class="mask" id="mask"><div class="modal">
+  <h3 id="modalTitle">表结构</h3>
+  <div class="c" id="modalBody"></div>
+  <div class="x"><button class="tbtn" id="modalClose">关闭</button></div>
+</div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let CATALOG = null, CURRENT = null, LAST_SQL = "";
+let CONNDETAIL = null;
+const OPEN = new Set();
+let SCHEMA = null;
+let INITED = false;
+
+async function api(path, body){
+  const opt = body ? {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)} : {};
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function dsLine(d){
+  const db = d.database || d.schema || "-";
+  return `${d.host}:${d.port}/${db}`;
+}
+
+async function loadCatalog(refresh){
+  $("#tree").innerHTML = '<div class="empty" style="padding:14px;color:#8b98a9">扫描中…</div>';
+  CATALOG = await api("/api/catalog" + (refresh?"?r=1":""));
+  $("#rootPath").textContent = "根目录 " + CATALOG.root + " · 共 " + CATALOG.total + " 个数据源";
+  renderNoDb();
+  if(!INITED && CATALOG.projects.length){
+    const p0 = CATALOG.projects[0];
+    OPEN.add("P:"+p0.name);
+    if(p0.profiles[0]) OPEN.add("R:"+p0.name+"|"+p0.profiles[0].profile);
+    INITED = true;
+  }
+  renderTree();
+}
+
+function renderNoDb(){
+  const el = $("#nodb"); if(!el) return;
+  const list = CATALOG.noDbProjects || [];
+  el.innerHTML = list.length
+    ? `<b>无数据库配置的项目（${list.length}）</b><br>${esc(list.join("、"))}`
+    : "";
+}
+
+function renderTree(){
+  const kw = $("#search").value.trim().toLowerCase();
+  const tree = $("#tree"); tree.innerHTML = "";
+  CATALOG.projects.forEach(p=>{
+    const pKey = "P:"+p.name;
+    const profs = p.profiles.map(pr=>{
+      const items = pr.items.filter(d=>{
+        if(!kw) return true;
+        return (p.name+" "+pr.profile+" "+pr.env+" "+d.typeLabel+" "+d.host+" "+(d.database||"")+" "+(d.username||"")).toLowerCase().includes(kw);
+      });
+      return {profile:pr.profile, env:pr.env, items};
+    }).filter(pr=>pr.items.length);
+
+    if(!profs.length) return;
+    const pe = document.createElement("div"); pe.className="proj";
+    const total = profs.reduce((a,b)=>a+b.items.length,0);
+    pe.innerHTML = `<div class="row"><span class="caret">▶</span>${esc(p.name)}<span class="badge" style="margin-left:auto">${total}</span></div>`;
+    const prow = pe.querySelector(".row");
+    if(kw || OPEN.has(pKey)) pe.classList.add("open");
+
+    profs.forEach(pr=>{
+      const rKey = "R:"+p.name+"|"+pr.profile;
+      const pre = document.createElement("div"); pre.className="prof";
+      pre.innerHTML = `<div class="row"><span class="caret">▶</span><span>${esc(pr.env)}</span><span style="color:#5c6b7d">· ${esc(pr.profile)}</span><span class="badge" style="margin-left:auto">${pr.items.length}</span></div>`;
+      const pro = pre.querySelector(".row");
+      const items = document.createElement("div"); items.className="items";
+      pr.items.forEach(d=>{
+        const el = document.createElement("div"); el.className="ds"; el.dataset.id=d.id;
+        el.dataset.p = p.name; el.dataset.pr = pr.profile;
+        if(CURRENT && CURRENT.id===d.id) el.classList.add("sel");
+        const flag = d.placeholder ? ' <span style="color:#f4b942">⚠</span>' : '';
+        el.innerHTML = `<span class="badge ${d.type}">${esc(d.typeLabel)}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis">${esc(dsLine(d))}${flag}</span>
+          <span class="meta">${esc(d.username||"")}</span>`;
+        el.title = `${d.module}\nuser=${d.username}`;
+        el.onclick = ()=>selectDs(d, el);
+        items.appendChild(el);
+      });
+      if(kw || OPEN.has(rKey)) pre.classList.add("open");
+      pro.onclick = (e)=>{
+        e.stopPropagation();
+        const now = pre.classList.toggle("open");
+        now ? OPEN.add(rKey) : OPEN.delete(rKey);
+      };
+      pre.appendChild(items);
+      pe.appendChild(pre);
+    });
+
+    prow.onclick = ()=>{
+      const now = pe.classList.toggle("open");
+      now ? OPEN.add(pKey) : OPEN.delete(pKey);
+    };
+    tree.appendChild(pe);
+  });
+  if(!tree.children.length) tree.innerHTML = '<div class="empty" style="padding:14px;color:#8b98a9">无匹配结果</div>';
+}
+
+async function selectDs(d, el){
+  document.querySelectorAll(".ds.sel").forEach(x=>x.classList.remove("sel"));
+  el.classList.add("sel");
+  if(el.dataset.p){ OPEN.add("P:"+el.dataset.p); OPEN.add("R:"+el.dataset.p+"|"+el.dataset.pr); }
+  CURRENT = d;
+  closeSide();
+  closeConnPop();
+  CONNDETAIL = {type:d.typeLabel, host:d.host, port:d.port, db:d.database||d.schema||"-", user:d.username, module:d.module, product:"", version:"", schema:d.schema||""};
+  setConn("loading", d.typeLabel+" "+dsLine(d), "正在连接…");
+  $("#tlist").innerHTML = '<div class="empty">连接中…</div>';
+  renderWork();
+  const r = await api("/api/connect", {id:d.id});
+  if(r.error){ CONNDETAIL.err=r.error; setConn("off", d.typeLabel+" "+dsLine(d), r.error); $("#tlist").innerHTML='<div class="empty">连接失败</div>'; return; }
+  CONNDETAIL = {type:r.entry.typeLabel, host:r.entry.host, port:r.entry.port, db:r.entry.database||r.entry.schema||"-", user:r.entry.username, module:r.entry.module, product:(r.conn&&r.conn.product)||"", version:(r.conn&&r.conn.version)||"", schema:r.entry.schema||""};
+  setConn("on", r.entry.typeLabel+" "+r.entry.host+":"+r.entry.port+"/"+(r.entry.database||r.entry.schema||"-"),
+    ((r.conn&&r.conn.product)||"")+" "+((r.conn&&r.conn.version)||"")+" · user="+r.entry.username);
+  $("#tableCount").textContent = r.tableCount;
+  SCHEMA = (r.entry && r.entry.schema) || null;
+  const sel = $("#schemaSel");
+  if(sel) sel.onchange = ()=>{ SCHEMA = sel.value; loadTables(); };
+  loadSchemas();
+}
+
+async function loadSchemas(){
+  const sel = $("#schemaSel"); if(sel) sel.style.display = "none";
+  if(!CURRENT) return;
+  let r = {};
+  try { r = await api("/api/schemas", {id:CURRENT.id}); } catch(e){}
+  if(sel && r.schemas && r.schemas.length){
+    sel.innerHTML = r.schemas.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+    if(SCHEMA && r.schemas.includes(SCHEMA)) sel.value = SCHEMA;
+    else SCHEMA = sel.value;
+    sel.style.display = "inline-block";
+  }
+  loadTables();
+}
+
+async function loadTables(){
+  const r = await api("/api/tables", {id:CURRENT.id, schema:SCHEMA});
+  if(window.matchMedia("(max-width:860px)").matches) document.querySelector(".side-tables").classList.add("open");
+  const tl = $("#tlist"); tl.innerHTML="";
+  if(r.error){ tl.innerHTML='<div class="empty">'+esc(r.error)+'</div>'; return; }
+  const cnt = $("#tableCount"); if(cnt) cnt.textContent = r.tables.length;
+  if(!r.tables.length){ tl.innerHTML='<div class="empty">没有表</div>'; return; }
+  r.tables.forEach(t=>{
+    const el=document.createElement("div"); el.className="t"; el.textContent=t; el.title=t;
+    el.onclick=()=>showColumns(t); tl.appendChild(el);
+  });
+}
+
+async function showColumns(t){
+  $("#modalTitle").textContent = "表结构 · " + t;
+  $("#modalBody").innerHTML = '<div class="spin"></div> 加载中…';
+  $("#mask").classList.add("on");
+  const r = await api("/api/columns", {id:CURRENT.id, table:t, schema:SCHEMA});
+  if(r.error){ $("#modalBody").innerHTML = '<div class="err">'+esc(r.error)+'</div>'; return; }
+  let h = '<table><thead><tr><th>字段</th><th>类型</th><th>长度</th><th>可空</th></tr></thead><tbody>';
+  r.columns.forEach(c=>{ h+=`<tr><td>${esc(c.name)}</td><td>${esc(c.type)}</td><td>${esc(c.size)}</td><td>${c.nullable?"是":"否"}</td></tr>`; });
+  $("#modalBody").innerHTML = h + "</tbody></table>";
+}
+$("#modalClose").onclick = ()=> $("#mask").classList.remove("on");
+
+function setConn(state,title,desc){
+  const dot=$("#dot");
+  dot.className="dot"+(state==="on"?" on":state==="off"?" off":"");
+  $("#connTitle").textContent=title; $("#connDesc").textContent=desc;
+}
+
+function renderConnPop(){
+  const el=$("#connPop"); if(!el) return;
+  if(!CONNDETAIL){ el.innerHTML=""; return; }
+  const rows=[
+    ["类型", CONNDETAIL.type],
+    ["地址", CONNDETAIL.host ? CONNDETAIL.host+":"+CONNDETAIL.port : ""],
+    ["库/Schema", CONNDETAIL.db],
+    ["用户", CONNDETAIL.user],
+    ["版本", ((CONNDETAIL.product||"")+" "+(CONNDETAIL.version||"")).trim()],
+    ["模块", CONNDETAIL.module]
+  ].filter(r=>r[1]);
+  if(CONNDETAIL.err) rows.push(["错误", CONNDETAIL.err]);
+  el.innerHTML = rows.map(r=>'<div class="r"><span class="k">'+esc(r[0])+'</span><span class="v">'+esc(r[1])+'</span></div>').join("");
+}
+function closeConnPop(){
+  const c=$("#conn"), p=$("#connPop");
+  if(c) c.classList.remove("pop");
+  if(p) p.classList.remove("on");
+}
+function toggleConnPop(){
+  const c=$("#conn"), p=$("#connPop"); if(!c||!p||!CONNDETAIL) return;
+  const on = !p.classList.contains("on");
+  if(on){ renderConnPop(); p.classList.add("on"); } else { p.classList.remove("on"); }
+  c.classList.toggle("pop", on);
+}
+
+let MODE = "nl";
+function renderWork(){
+  const ph = MODE==="nl"
+    ? "用中文描述你想查什么，例如：查询每个部门有多少用户，按人数从多到少排列"
+    : "输入 SQL，例如：SELECT * FROM user_info LIMIT 10";
+  const val = MODE==="sql" ? esc(LAST_SQL) : "";
+  $("#work").innerHTML = `
+   <div class="ed">
+     <div class="tabs">
+       <div class="tab ${MODE==='nl'?'act':''}" data-m="nl">自然语言</div>
+       <div class="tab ${MODE==='sql'?'act':''}" data-m="sql">SQL</div>
+     </div>
+     <textarea class="ta" id="q" placeholder="${ph}">${val}</textarea>
+     <div class="rowctl">
+       <button class="btn" id="runBtn">${MODE==='nl'?'查询':'执行'}</button>
+       <label class="chk"><input type="checkbox" id="explainChk"> 用模型总结结果</label>
+       <label class="chk">最多行数 <input type="number" id="maxRows" value="200" min="1" max="10000"></label>
+       <span id="runHint" style="color:#8b98a9;font-size:12.5px"></span>
+     </div>
+   </div>
+   <div class="out" id="out"></div>`;
+  document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{ MODE=t.dataset.m; renderWork(); });
+  const btn = $("#runBtn");
+  if(btn) btn.onclick = run;
+  const ta = $("#q");
+  if(!ta) return;
+  ta.addEventListener("keydown", e=>{
+    if((e.metaKey||e.ctrlKey) && e.key==="Enter"){ e.preventDefault(); run(); }
+    if(MODE==="nl" && e.key==="Enter" && !e.shiftKey){ e.preventDefault(); run(); }
+  });
+  ta.focus();
+}
+
+async function run(){
+  const q = $("#q").value.trim();
+  if(!q) return;
+  const btn = $("#runBtn"); btn.disabled=true;
+  const hint = $("#runHint");
+  hint.innerHTML = '<span class="spin"></span> ' + (MODE==="nl"?"正在生成并执行 SQL…":"执行中…");
+  const out = $("#out"); out.innerHTML = "";
+  const payload = {id:CURRENT.id, maxRows:parseInt($("#maxRows").value)||200};
+  let r;
+  if(MODE==="nl"){ payload.question=q; payload.explain=$("#explainChk").checked; r = await api("/api/query", payload); }
+  else { payload.sql=q; r = await api("/api/sql", payload); }
+  btn.disabled=false; hint.textContent="";
+  renderResult(r);
+}
+
+function renderResult(r){
+  const out = $("#out");
+  if(r.error){ out.innerHTML = `<div class="err">✗ ${esc(r.error)}</div>` + (r.sql?`<div class="sqlbox" style="margin-top:12px">${esc(r.sql)}</div>`:""); return; }
+  let h = "";
+  if(r.sql){ LAST_SQL = r.sql; h += `<div class="sqlbox">${esc(r.sql)}</div>`; }
+  if(r.explanation) h += `<div class="explain">💡 ${esc(r.explanation)}</div>`;
+  if(r.summary) h += `<div class="summary"><b>结论</b>\n${esc(r.summary)}</div>`;
+  if(r.columns && r.columns.length){
+    h += '<div class="reswrap"><table><thead><tr>' + r.columns.map(c=>`<th>${esc(c)}</th>`).join("") + '</tr></thead><tbody>';
+    r.rows.forEach(row=>{
+      h += "<tr>" + row.map(v=> v===null?'<td class="null">NULL</td>':`<td title="${esc(v)}">${esc(v)}</td>`).join("") + "</tr>";
+    });
+    h += "</tbody></table></div>";
+    h += `<div class="stat">${r.rowCount} 行 · ${r.elapsedMs||0}ms</div>`;
+  } else if(r.updateCount!=null){
+    h += `<div class="stat">执行成功，影响行数：${r.updateCount}</div>`;
+  } else {
+    h += `<div class="stat">执行成功（无返回列）</div>`;
+  }
+  out.innerHTML = h;
+}
+
+function openSide(){ document.querySelector(".side").classList.add("open"); $("#sideMask").classList.add("on"); }
+function closeSide(){ document.querySelector(".side").classList.remove("open"); $("#sideMask").classList.remove("on"); }
+$("#sideToggle").onclick = ()=> document.querySelector(".side").classList.contains("open") ? closeSide() : openSide();
+$("#sideMask").onclick = closeSide;
+document.querySelector(".side-tables .th").onclick = (e)=>{
+  if(e.target.tagName === "SELECT") return;
+  document.querySelector(".side-tables").classList.toggle("open");
+};
+
+$("#search").oninput = renderTree;
+$("#refreshBtn").onclick = ()=>{ closeConnPop(); loadCatalog(true); };
+$("#conn").onclick = ()=>{ if(window.matchMedia("(max-width:860px)").matches) toggleConnPop(); };
+loadCatalog();
+</script>
+</body>
+</html>

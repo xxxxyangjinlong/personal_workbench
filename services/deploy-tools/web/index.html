@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一句话发布面板</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1b2230; --bd:#242c38;
+    --fg:#e6edf3; --muted:#8b98a9; --acc:#4c8dff; --acc2:#6ee7b7;
+    --warn:#f4b942; --err:#ff6b6b; --ok:#3fb950;
+  }
+  .nav{height:44px;display:flex;align-items:center;gap:6px;padding:0 14px;border-bottom:1px solid var(--bd);background:var(--panel)}
+  .nav .title{font-weight:600;margin-right:10px}
+  .nav a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:7px;font-size:13px}
+  .nav a:hover{background:var(--panel2);color:var(--fg)}
+  .nav a.on{background:#1d2b45;color:var(--fg)}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--fg);height:100vh;overflow:hidden}
+  .app{display:flex;height:calc(100vh - 44px)}
+  .side{width:300px;min-width:300px;background:var(--panel);border-right:1px solid var(--bd);
+    display:flex;flex-direction:column}
+  .side .hd{padding:14px 16px 12px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}
+  .side .hd h1{margin:0;font-size:15px;font-weight:600}
+  .side .hd .sub{color:var(--muted);font-size:11px}
+  .tree{overflow:auto;flex:1;padding:6px 8px 20px}
+  .proj{margin-bottom:2px}
+  .proj>.row{padding:8px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:8px;font-weight:600}
+  .proj>.row:hover{background:var(--panel2)}
+  .caret{color:var(--muted);font-size:10px;transition:transform .15s}
+  .proj.open>.row .caret{transform:rotate(90deg)}
+  .envs{margin-left:16px;display:none;flex-direction:column;gap:2px}
+  .proj.open>.envs{display:flex}
+  .env{padding:6px 9px;border-radius:6px;cursor:pointer;font-size:12.5px;display:flex;gap:8px;align-items:center;border:1px solid transparent}
+  .env:hover{background:var(--panel2)}
+  .env.sel{background:#1d2b45;border-color:var(--acc)}
+  .badge{font-size:10px;padding:1px 6px;border-radius:5px;background:#22303f;color:var(--muted)}
+  .badge.jar{color:#7ab0ff}.badge.docker{color:#6ee7b7}.badge.static{color:#f4b942}.badge.war{color:#d8a0ff}
+  .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .top{padding:16px 20px;border-bottom:1px solid var(--bd)}
+  .top h2{margin:0 0 4px;font-size:16px}
+  .top .muted{color:var(--muted);font-size:12px}
+  .card{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin:14px 20px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px}
+  .kv{font-size:12.5px;display:flex;gap:8px}
+  .kv .k{color:var(--muted);min-width:64px}
+  .kv .v{word-break:break-all}
+  .opts{margin:12px 20px 0;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+  .opt{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+  .opt input{accent-color:var(--acc)}
+  .actions{margin-left:auto;display:flex;gap:8px}
+  button{border:1px solid var(--bd);background:var(--panel2);color:var(--fg);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--acc)}
+  button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+  button.pri:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:transparent}
+  .logwrap{margin:14px 20px 16px;flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .logwrap .lhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:12px}
+  .logwrap .lhd .t{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  pre.log{flex:1;margin:0;background:#0a0d12;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;
+    overflow:auto;font:12.5px/1.55 "SF Mono",Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px}
+  .dot.run{background:var(--warn);animation:pulse 1s infinite}
+  .dot.ok{background:var(--ok)}.dot.err{background:var(--err)}
+  @keyframes pulse{50%{opacity:.3}}
+
+  /* ---- mobile ---- */
+  @media (max-width: 860px){
+    body{height:auto;min-height:100dvh;overflow:auto}
+    .app{flex-direction:column;height:auto}
+    .side{width:100%;min-width:0;max-height:38vh;border-right:none;border-bottom:1px solid var(--bd)}
+    .main{overflow:visible}
+    .top{padding:12px 14px}
+    .card{grid-template-columns:1fr;margin:12px 14px 0;gap:6px}
+    .kv .k{min-width:56px}
+    .opts{margin:10px 14px 0;gap:12px}
+    .actions{width:100%;margin-left:0;justify-content:flex-end}
+    .logwrap{margin:12px 14px 16px}
+    pre.log{min-height:44vh}
+    .nav a{padding:6px 12px}
+  }
+
+</style>
+</head>
+<body>
+<div class="nav">
+  <span class="title">运维面板</span>
+  <a href="/" class="on">发布</a>
+  <a href="/shell">服务器命令</a>
+</div>
+<div class="app">
+  <aside class="side">
+    <div class="hd">
+      <div><h1>发布面板</h1><div class="sub" id="sub">加载中…</div></div>
+      <button class="ghost" id="refresh" title="刷新">⟳</button>
+    </div>
+    <div class="tree" id="tree"></div>
+  </aside>
+  <main class="main">
+    <div class="top">
+      <h2 id="title">请选择项目环境</h2>
+      <div class="muted" id="subtitle">左侧点击一个项目，再选一个环境</div>
+    </div>
+    <div class="card" id="card" style="display:none"></div>
+    <div class="opts" id="opts" style="display:none">
+      <label class="opt"><input type="checkbox" id="optNoBuild"> 跳过构建</label>
+      <label class="opt"><input type="checkbox" id="optNoRestart"> 只上传不重启</label>
+      <label class="opt"><input type="checkbox" id="optDry"> 演练（dry-run）</label>
+      <div class="actions">
+        <button class="ghost" id="cancel" disabled>停止</button>
+        <button class="pri" id="deploy" disabled>发布</button>
+      </div>
+    </div>
+    <div class="logwrap">
+      <div class="lhd">
+        <span class="t"><span class="dot" id="statusDot"></span><span id="statusText">就绪</span></span>
+        <span class="t" id="jobInfo"></span>
+      </div>
+      <pre class="log" id="log">等待发布…</pre>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let PROJECTS = [], sel = null, pollTimer = null;
+
+async function api(path, body){
+  const opt = body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {};
+  const r = await fetch(path, opt);
+  return await r.json();
+}
+
+async function loadProjects(){
+  const d = await api('/api/projects');
+  PROJECTS = d.projects || [];
+  $('sub').textContent = `${PROJECTS.length} 个项目`;
+  const tree = $('tree'); tree.innerHTML = '';
+  for(const p of PROJECTS){
+    const div = document.createElement('div'); div.className = 'proj';
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<span class="caret">▶</span><span>${p.name}</span><span class="badge ${p.kind}">${p.kind}</span>`;
+    row.onclick = () => div.classList.toggle('open');
+    const envs = document.createElement('div'); envs.className = 'envs';
+    if(p.envs.length === 0){
+      const ed = document.createElement('div'); ed.className = 'env';
+      ed.innerHTML = `<span style="color:var(--muted)">未登记环境</span>`;
+      envs.appendChild(ed);
+    }
+    for(const e of p.envs){
+      const ed = document.createElement('div'); ed.className = 'env';
+      ed.innerHTML = `<span>${e.name}</span><span class="badge">${e.host||''}</span>`;
+      ed.onclick = ev => { ev.stopPropagation(); select(p, e, ed); };
+      envs.appendChild(ed);
+    }
+    div.appendChild(row); div.appendChild(envs); tree.appendChild(div);
+  }
+}
+
+async function select(p, e, el){
+  document.querySelectorAll('.env.sel').forEach(x=>x.classList.remove('sel'));
+  el.classList.add('sel');
+  sel = {project:p.name, env:e.name};
+  $('title').textContent = `${p.name} → ${e.name} 环境`;
+  const info = await api('/api/detail', sel);
+  if(info.error){ $('subtitle').textContent = info.error; $('card').style.display='none'; $('opts').style.display='none'; return; }
+  $('subtitle').textContent = `类型 ${info.kind}　目标 ${info.user}@${info.host}`;
+  $('card').style.display='grid';
+  $('card').innerHTML = [
+    ['项目', info.project], ['环境', info.env],
+    ['类型', info.kind], ['目标主机', `${info.user}@${info.host}`],
+    ['部署目录', info.path], ['profile', info.profile || '（默认）'],
+    ['端口', info.port || '—'], ['产物', info.artifact || '—'],
+  ].map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+  $('opts').style.display='flex';
+  $('deploy').disabled = false;
+}
+
+function setStatus(cls, text){ $('statusDot').className = 'dot ' + cls; $('statusText').textContent = text; }
+
+async function startDeploy(){
+  if(!sel) return;
+  $('log').textContent = '';
+  const body = {project:sel.project, env:sel.env,
+    noBuild:$('optNoBuild').checked, noRestart:$('optNoRestart').checked, dryRun:$('optDry').checked};
+  const r = await api('/api/deploy', body);
+  if(r.error){ appendLog('❌ ' + r.error); return; }
+  $('deploy').disabled = true; $('cancel').disabled = false;
+  setStatus('run', '发布中…');
+  $('jobInfo').textContent = r.cmd;
+  let pos = 0;
+  pollTimer = setInterval(async () => {
+    const d = await api(`/api/log?job=${r.job}&from=${pos}`);
+    if(d.error){ clearInterval(pollTimer); return; }
+    if(d.lines && d.lines.length){ pos = d.next; appendLog(d.lines.join('\n')); }
+    if(d.done){
+      clearInterval(pollTimer); $('deploy').disabled = false; $('cancel').disabled = true;
+      setStatus(d.rc === 0 ? 'ok' : 'err', d.rc === 0 ? '发布成功' : `失败（退出码 ${d.rc}）`);
+    }
+  }, 500);
+}
+
+function appendLog(txt){
+  const el = $('log');
+  if(el.textContent === '等待发布…') el.textContent = '';
+  el.textContent += txt + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function cancelDeploy(){
+  if(pollTimer) clearInterval(pollTimer);
+  setStatus('err', '已停止查看');
+  $('deploy').disabled = false; $('cancel').disabled = true;
+}
+
+$('refresh').onclick = loadProjects;
+$('deploy').onclick = startDeploy;
+$('cancel').onclick = cancelDeploy;
+loadProjects();
+</script>
+</body>
+</html>

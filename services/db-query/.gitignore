@@ -1,0 +1,6 @@
+dbquery.py
+catalog.json
+bridge/classes/
+__pycache__/
+server.pid
+server.log

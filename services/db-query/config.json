@@ -1,0 +1,8 @@
+{
+  "projects_root": "/Users/yangjinlong/IdeaProjects",
+  "max_rows": 200,
+  "explain": false,
+  "extra_classpath": [],
+  "exclude_dirs": ["target", "node_modules", "dist", ".git", "build", "logs", ".idea"],
+  "llm": null
+}

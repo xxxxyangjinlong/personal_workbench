@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0e1116" />
+<title>服务器终端</title>
+<link rel="stylesheet" href="/vendor/xterm.css" />
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--panel2:#1b2230;--bd:#242c38;--fg:#e6edf3;--muted:#8b98a9;
+    --acc:#4c8dff;--warn:#f4b942;--err:#ff6b6b;--ok:#3fb950}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--fg);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;
+    overscroll-behavior:none}
+  .nav{height:46px;display:flex;align-items:center;gap:6px;padding:0 10px;padding-top:env(safe-area-inset-top);
+    border-bottom:1px solid var(--bd);background:var(--panel);flex:none}
+  .nav .title{font-weight:600;margin-right:6px;white-space:nowrap}
+  .nav a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:7px;font-size:13px;white-space:nowrap}
+  .nav a:hover,.nav a.on{background:#1d2b45;color:var(--fg)}
+  .nav .spacer{flex:1}
+  .iconbtn{display:none;border:1px solid var(--bd);background:var(--panel2);color:var(--fg);
+    width:34px;height:34px;border-radius:8px;font-size:16px;line-height:1;cursor:pointer}
+  .app{display:flex;flex:1;min-height:0;position:relative}
+  .backdrop{display:none}
+  .side{width:230px;min-width:230px;background:var(--panel);border-right:1px solid var(--bd);display:flex;flex-direction:column}
+  .side .hd{padding:12px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}
+  .side .hd h1{margin:0;font-size:14px}
+  .side .hd .sub{color:var(--muted);font-size:11px}
+  .list{overflow:auto;flex:1;padding:6px 8px 20px;-webkit-overflow-scrolling:touch}
+  .srv{padding:9px 10px;border-radius:9px;cursor:pointer;margin-bottom:3px}
+  .srv:hover{background:var(--panel2)}
+  .srv .a{font-weight:600;font-size:13.5px}
+  .srv .h{color:var(--muted);font-size:11.5px}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+  .tabs{display:flex;gap:4px;padding:8px 10px 0;flex-wrap:wrap;border-bottom:1px solid var(--bd);flex:none}
+  .tab{display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--bd);border-bottom:none;
+    border-radius:9px 9px 0 0;background:var(--panel);cursor:pointer;font-size:12.5px;color:var(--muted);white-space:nowrap}
+  .tab.on{background:var(--panel2);color:var(--fg);border-color:var(--acc)}
+  .tab .x{opacity:.65;font-size:14px;padding:0 2px}.tab .x:hover{opacity:1;color:var(--err)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 0;flex:none}
+  .chip{font-size:12px;padding:6px 12px;border-radius:20px;background:var(--panel2);border:1px solid var(--bd);
+    color:var(--muted);cursor:pointer;white-space:nowrap}
+  .chip:hover{border-color:var(--acc);color:var(--fg)}
+  .termwrap{flex:1;display:flex;flex-direction:column;min-height:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
+  #termhost{position:relative;flex:1;min-height:0;background:#0a0d12;border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+  .tslot{position:absolute;inset:0;padding:6px 4px 6px 8px}
+  .tslot.hidden{display:none}
+  .empty{color:var(--muted);padding:30px;text-align:center}
+  .bar{display:flex;gap:8px;margin-top:8px;align-items:center;flex:none;flex-wrap:wrap}
+  .bar .hint{color:var(--muted);font-size:12px}
+  button{border:1px solid var(--bd);background:var(--panel2);color:var(--fg);padding:8px 13px;border-radius:8px;
+    cursor:pointer;font-size:12.5px;white-space:nowrap}
+  button:hover{border-color:var(--acc)}
+  .key{padding:8px 11px;font-family:"SF Mono",Menlo,monospace}
+
+  /* ---------- 手机 / 窄屏 ---------- */
+  @media (max-width: 760px){
+    .iconbtn{display:inline-flex;align-items:center;justify-content:center}
+    .nav .title{font-size:14px}
+    .nav a{padding:6px 8px}
+    .side{position:fixed;top:0;bottom:0;left:0;width:80%;max-width:320px;z-index:30;
+      transform:translateX(-105%);transition:transform .22s ease;box-shadow:0 0 40px rgba(0,0,0,.55);
+      padding-top:env(safe-area-inset-top)}
+    body.navopen .side{transform:none}
+    body.navopen .backdrop{display:block;position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.45)}
+    #navclose{display:inline-flex;align-items:center;justify-content:center}
+    .tabs{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:6px}
+    .tabs::-webkit-scrollbar{height:0}
+    .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px}
+    .chips::-webkit-scrollbar{height:0}
+    .termwrap{padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+    .bar{flex-wrap:nowrap;overflow-x:auto;gap:6px}
+    .bar::-webkit-scrollbar{height:0}
+    .bar .hint{display:none}
+    .tslot{padding:4px 2px 4px 6px}
+  }
+</style>
+</head>
+<body>
+<div class="nav">
+  <button class="iconbtn" id="menu" title="服务器列表">☰</button>
+  <span class="title">运维面板</span>
+  <span class="spacer"></span>
+  <a href="/">发布</a>
+  <a href="/shell" class="on">服务器终端</a>
+</div>
+<div class="app">
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="side" id="side">
+    <div class="hd"><div><h1>服务器</h1><div class="sub" id="sub">加载中…</div></div>
+      <div style="display:flex;gap:6px;align-items:center"><button id="refresh" style="padding:3px 9px">⟳</button><button class="iconbtn" id="navclose" title="收起">✕</button></div></div>
+    <div class="list" id="list"></div>
+  </aside>
+  <main class="main">
+    <div class="tabs" id="tabs"></div>
+    <div class="chips" id="chips"></div>
+    <div class="termwrap">
+      <div id="termhost"><div class="empty" id="empty">选左侧/左上角菜单里的服务器，打开终端（支持 vim / top / codex 等全屏程序）。</div></div>
+      <div class="bar">
+        <button id="ctrlc" title="发送 Ctrl-C">中断 ^C</button>
+        <button class="key" data-key="esc" title="Esc">Esc</button>
+        <button class="key" data-key="tab" title="Tab">Tab</button>
+        <button class="key" data-key="up" title="↑">↑</button>
+        <button class="key" data-key="down" title="↓">↓</button>
+        <button class="key" data-key="left" title="←">←</button>
+        <button class="key" data-key="right" title="→">→</button>
+        <button id="clear" title="清屏">清屏</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const Terminal = window.Terminal;
+const FitAddon = (window.FitAddon && window.FitAddon.FitAddon) || (window.FitAddon && window.FitAddon);
+let SERVERS = [], tabs = [], active = -1;
+
+const QUICK = [
+  ['进程', 'ps -ef | grep java | grep -v grep'],
+  ['端口', 'ss -ltnp'],
+  ['磁盘', 'df -h'],
+  ['内存', 'free -m'],
+  ['负载', 'uptime'],
+  ['目录', 'ls -lht /usr/local/src | head -20'],
+];
+const QUICK_LOCAL = [
+  ['进程', 'ps aux | grep -i java | grep -v grep'],
+  ['端口', 'lsof -nP -iTCP -sTCP:LISTEN'],
+  ['磁盘', 'df -h'],
+  ['内存', 'vm_stat | head -8'],
+  ['负载', 'uptime'],
+  ['目录', 'ls -lht ~ | head -20'],
+];
+const KEYS = { esc:'\x1b', tab:'\t', up:'\x1b[A', down:'\x1b[B', left:'\x1b[D', right:'\x1b[C' };
+
+async function api(path, body){
+  const opt = body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {};
+  return await (await fetch(path, opt)).json();
+}
+
+function isNarrow(){ return window.innerWidth <= 760; }
+function openNav(open){ document.body.classList.toggle('navopen', open); }
+function send(t, data){ if(t){ t.term.focus(); api('/api/term/input', {sid: t.sid, data}); } }
+function refit(){ const t = tabs[active]; if(t){ try { t.fit.fit(); } catch(e){} } }
+
+async function loadServers(){
+  const d = await api('/api/servers');
+  SERVERS = d.servers || [];
+  $('sub').textContent = `${SERVERS.length} 台`;
+  const list = $('list'); list.innerHTML = '';
+  for(const s of SERVERS){
+    const el = document.createElement('div'); el.className = 'srv';
+    el.innerHTML = s.local
+      ? `<div class="a">🖥 本机</div><div class="h">本地 Shell</div>`
+      : `<div class="a">${s.alias}</div><div class="h">${s.user}@${s.host}</div>`;
+    el.onclick = () => { openNav(false); openTab(s); };
+    list.appendChild(el);
+  }
+}
+
+async function openTab(s){
+  const exist = tabs.findIndex(t => t.server === s.alias);
+  if(exist >= 0){ return setActive(exist); }
+  const r = await api('/api/term/open', {server: s.alias});
+  if(r.error){ alert(r.error); return; }
+  const box = document.createElement('div');
+  box.className = 'tslot hidden';
+  $('termhost').appendChild(box);
+  const term = new Terminal({
+    cursorBlink:true, fontSize: isNarrow()?12:12.5, scrollback:8000, allowProposedApi:true,
+    fontFamily:'"SF Mono",Menlo,Consolas,"PingFang SC",monospace',
+    theme:{background:'#0a0d12', foreground:'#e6edf3', cursor:'#4c8dff', selectionBackground:'#2b3a55'}
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open(box);
+  const tab = {sid:r.sid, server:s.alias, label:s.local?'本机':s.alias, local:!!s.local,
+               logs:s.logs||[], term, fit, box, es:null};
+  tabs.push(tab);
+  term.onData(d => api('/api/term/input', {sid: tab.sid, data: d}));
+  term.onResize(({cols,rows}) => api('/api/term/resize', {sid: tab.sid, cols, rows}));
+  const es = new EventSource('/api/term/stream?sid=' + tab.sid);
+  es.onmessage = ev => {
+    const bin = atob(ev.data);
+    const u8 = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
+    tab.term.write(u8);
+  };
+  es.addEventListener('close', () => es.close());
+  tab.es = es;
+  setActive(tabs.length - 1);
+}
+
+function setActive(i){
+  active = i;
+  tabs.forEach((t, k) => t.box.classList.toggle('hidden', k !== i));
+  renderTabs(); renderChips();
+  const t = tabs[i];
+  if(t){
+    const e = $('empty'); if(e) e.remove();
+    requestAnimationFrame(() => { refit(); t.term.focus(); });
+  }
+}
+
+function renderTabs(){
+  const box = $('tabs'); box.innerHTML = '';
+  tabs.forEach((t, i) => {
+    const el = document.createElement('div'); el.className = 'tab' + (i===active?' on':'');
+    el.innerHTML = `<span>⌨ ${t.label || t.server}</span><span class="x">✕</span>`;
+    el.onclick = (e) => {
+      if(e.target.classList.contains('x')){ closeTab(i); e.stopPropagation(); return; }
+      setActive(i);
+    };
+    box.appendChild(el);
+  });
+}
+
+function renderChips(){
+  const box = $('chips'); box.innerHTML = '';
+  const t = tabs[active]; if(!t) return;
+  const add = (label, cmd, title) => {
+    const el = document.createElement('span'); el.className = 'chip'; el.textContent = label;
+    if(title) el.title = title;
+    el.onclick = () => send(t, cmd + '\r');
+    box.appendChild(el);
+  };
+  for(const [label, cmd] of (t.local ? QUICK_LOCAL : QUICK)) add(label, cmd);
+  for(const L of (t.logs || [])) add('📄 ' + L.label, 'tail -f ' + L.path, 'tail -f ' + L.path);
+}
+
+async function closeTab(i){
+  const t = tabs[i];
+  if(t.es) t.es.close();
+  try { t.term.dispose(); } catch(e){}
+  t.box.remove();
+  api('/api/term/close', {sid: t.sid});
+  tabs.splice(i, 1);
+  if(tabs.length === 0){
+    active = -1;
+    $('termhost').innerHTML = '<div class="empty" id="empty">选左侧/左上角菜单里的服务器，打开终端（支持 vim / top / codex 等全屏程序）。</div>';
+  } else {
+    setActive(Math.min(i, tabs.length - 1));
+  }
+  renderTabs(); renderChips();
+}
+
+$('menu').onclick = () => openNav(!document.body.classList.contains('navopen'));
+$('backdrop').onclick = () => openNav(false);
+$('navclose').onclick = () => openNav(false);
+$('refresh').onclick = loadServers;
+$('ctrlc').onclick = () => send(tabs[active], '\x03');
+$('clear').onclick = () => { const t = tabs[active]; if(t){ t.term.clear(); t.term.focus(); } };
+document.querySelectorAll('.bar .key').forEach(b => b.onclick = () => send(tabs[active], KEYS[b.dataset.key] || ''));
+$('termhost').addEventListener('click', () => { const t = tabs[active]; if(t) t.term.focus(); });
+
+window.addEventListener('resize', () => {
+  if(!isNarrow()) openNav(false);
+  refit();
+});
+if(window.visualViewport){ window.visualViewport.addEventListener('resize', refit); }
+window.addEventListener('orientationchange', () => setTimeout(refit, 300));
+loadServers();
+</script>
+</body>
+</html>
