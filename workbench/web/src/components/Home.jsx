@@ -12,7 +12,7 @@ function relTime(sec) {
   return `${dt.getMonth() + 1}月${dt.getDate()}日`;
 }
 
-export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenHotspot, onOpenRadar, onLogout }) {
+export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenRadar, onLogout }) {
   const [services, setServices] = useState([]);
   const [pinned, setPinned] = useState([]);
   const [threadsById, setThreadsById] = useState({});
@@ -79,14 +79,6 @@ export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenH
             <div className="ftext">
               <div className="fname">小红书热门</div>
               <div className="fsub">每日抓各品类热门笔记，按热度/收藏率/转发率排榜</div>
-            </div>
-            <span className="chev">›</span>
-          </li>
-          <li onClick={onOpenHotspot}>
-            <span className="fico">🔥</span>
-            <div className="ftext">
-              <div className="fname">热点雷达</div>
-              <div className="fsub">微博 / 百度 / 知乎 / 头条 / 抖音热搜，一键生成小红书草稿</div>
             </div>
             <span className="chev">›</span>
           </li>

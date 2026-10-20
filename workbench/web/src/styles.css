@@ -421,7 +421,7 @@ textarea { resize: none; max-height: 40vh; }
 .md img { max-width: 100%; border-radius: 10px; }
 .msg.user .md pre { background: #23253a; }
 
-/* ================= 热点雷达 ================= */
+/* ================= 小红书热门（榜单/卡片列表通用） ================= */
 .hchips { flex: none; display: flex; gap: 8px; padding: 10px 14px; overflow-x: auto; border-bottom: 1px solid var(--line); }
 .hchip { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--card); color: var(--fg); border: 1px solid transparent; border-radius: 999px; padding: 7px 12px; font-size: 13px; }
 .hchip.on { background: var(--accent-soft, #eef0ff); color: var(--accent-ink, #3b3ed6); font-weight: 600; }

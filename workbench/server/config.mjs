@@ -23,8 +23,8 @@ export const TTYD_PORT = Number(process.env.TTYD_PORT || 7681);
 export const TTYD_BASE = process.env.TTYD_BASE || '/term';
 export const TMUX_SESSION = process.env.TMUX_SESSION || 'main';
 
-// 热点雷达生成文案时的会话工作目录
-export const HOTSPOT_CWD = process.env.HOTSPOT_CWD || path.join(os.homedir(), 'workProjects', 'xhs-hotspot');
+// 自动发帖任务新建会话的工作目录
+export const XHS_WORK_CWD = process.env.XHS_WORK_CWD || process.env.HOTSPOT_CWD || path.join(os.homedir(), 'workProjects', 'xhs-hotspot');
 
 // 「小红书热门雷达」每日扫描的关键词（按「最多点赞」口径统计；可用 XHS_KEYWORDS=a,b,c 覆盖）
 export const XHS_KEYWORDS = (process.env.XHS_KEYWORDS
@@ -35,7 +35,7 @@ export const XHS_KEYWORDS = (process.env.XHS_KEYWORDS
 // 每天几点后自动跑当天的榜（默认 8 点）
 export const XHS_RADAR_HOUR = Number(process.env.XHS_RADAR_HOUR || 8);
 
-// 「每天自动发小红书」：默认开；早/晚两个时间点（整点触发）；主题取榜单第 1 名
+// 「每天自动发小红书提问帖」：默认开；早/晚两个时间点（整点触发）；主题取榜单第 1 名
 export const XHS_AUTOPOST = (process.env.XHS_AUTOPOST || 'on') !== 'off';
 export const XHS_AUTOPOST_HOURS = (process.env.XHS_AUTOPOST_HOURS || '9,15')
   .split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n <= 23);

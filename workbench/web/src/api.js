@@ -32,7 +32,6 @@ export const api = {
   projects: () => req('/api/projects'),
   services: () => req('/api/services'),
   running: () => req('/api/running'),
-  hotspot: (refresh) => req('/api/hotspot' + (refresh ? '?refresh=1' : '')),
   xhsRadar: () => req('/api/xhs-radar'),
   xhsRadarRun: () => req('/api/xhs-radar/run', { method: 'POST', body: '{}' }),
   xhsRadarPost: (visibility) => req('/api/xhs-radar/autopost', { method: 'POST', body: JSON.stringify({ visibility }) }),

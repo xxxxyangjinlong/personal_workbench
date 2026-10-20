@@ -9,12 +9,11 @@ import { randomUUID } from 'node:crypto';
 import { CodexClient } from './codex-client.mjs';
 import { startTtyd } from './terminal.mjs';
 import { makeProxyServer } from './proxy.mjs';
-import { getHotspots } from './hotspot.mjs';
 import { runScan as xhsRunScan, getLatestSnapshot, radarMeta, startScheduler as startXhsRadar } from './xhs-radar.mjs';
 import { autopostMeta, postNow as xhsPostNow, startAutopost } from './xhs-autopost.mjs';
 import {
   CODEX_BIN, PORT, ACCESS_TOKEN, DEFAULT_CWD, DEFAULT_SANDBOX, DEFAULT_APPROVAL, DEFAULT_MODEL,
-  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS, HOTSPOT_CWD,
+  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS, XHS_WORK_CWD,
 } from './config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -129,17 +128,9 @@ app.get('/api/running', auth, (_req, res) => {
   res.json({ running: [...runningThreads.keys()] });
 });
 
-// ---------- 热点雷达 ----------
-app.get('/api/hotspot', auth, async (req, res) => {
-  try {
-    const data = await getHotspots({ refresh: req.query.refresh === '1' });
-    res.json({ ...data, cwd: HOTSPOT_CWD });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // ---------- 小红书热门雷达 ----------
 app.get('/api/xhs-radar', auth, (_req, res) => {
-  res.json({ latest: getLatestSnapshot(), cwd: HOTSPOT_CWD, autopost: autopostMeta(), ...radarMeta() });
+  res.json({ latest: getLatestSnapshot(), cwd: XHS_WORK_CWD, autopost: autopostMeta(), ...radarMeta() });
 });
 app.post('/api/xhs-radar/run', auth, (_req, res) => {
   xhsRunScan({ reason: 'manual' }).catch(() => {});

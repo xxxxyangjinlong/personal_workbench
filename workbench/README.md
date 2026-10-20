@@ -45,26 +45,33 @@ npm run dev
 | `DEFAULT_SANDBOX` | workspace-write | read-only / workspace-write / danger-full-access |
 | `DEFAULT_APPROVAL` | never | untrusted / on-request / never |
 | `DEFAULT_MODEL` | 空 | 默认模型 |
-| `HOTSPOT_CWD` | `~/workProjects/xhs-hotspot` | 热点雷达生成文案时新建会话的工作目录 |
+| `XHS_WORK_CWD` | `~/workProjects/xhs-hotspot` | 自动发帖任务新建会话的工作目录 |
 | `XHS_KEYWORDS` | 22 个品类词 | 小红书热门雷达扫描的关键词，逗号分隔可覆盖 |
 | `XHS_RADAR_HOUR` | 8 | 每天几点后自动跑当天的热门榜 |
-
-## 热点雷达
-
-`GET /api/hotspot` 聚合微博 / 百度 / 知乎 / 头条 / 抖音热搜（公开只读接口，缓存 5 分钟，`?refresh=1` 强制刷新）。
-前端「热点雷达」页点某条的 ✍️ 会新建一个 Codex 会话（`danger-full-access`）并把预置提示词发进去，
-由 Codex 调用 `xiaohongshu` MCP 生成文案并发布草稿（默认「仅自己可见」）。
-小红书 MCP 部署在 `~/workProjects/xiaohongshu-mcp`（Docker，`127.0.0.1:18060`）。
+| `XHS_AUTOPOST` | on | 关掉自动发帖设 `off` |
+| `XHS_AUTOPOST_HOURS` | 9,15 | 每天自动发帖的整点（逗号分隔） |
+| `XHS_AUTOPOST_METRIC` | medLikes | 取第 1 名依据：medLikes / medCol / medSh |
+| `XHS_AUTOPOST_VISIBILITY` | 公开可见 | 或「仅自己可见」 |
 
 ## 小红书热门雷达
 
 每天 `XHS_RADAR_HOUR` 点后自动（也可手动）按关键词调 `xiaohongshu` MCP 的 `search_feeds`
 （`sort_by=最多点赞`、一周内），统计每个品类的**中位点赞 / 收藏率 / 转发率 / 视频占比**，
-按天存到 `data/xhs-radar/YYYY-MM-DD.json`。前端「小红书热门」页有三张榜（热度 / 收藏率 / 转发率），
-点品类 🎯 会新建会话让 Codex 参考该品类套路出选题。
+按天存到 `data/xhs-radar/YYYY-MM-DD.json`。前端「小红书热门」页有三张榜（热度 / 收藏率 / 转发率）。
 
 - `GET /api/xhs-radar` — 最新快照 + 状态（`scanning` / `lastError` / `hour`）
 - `POST /api/xhs-radar/run` — 手动触发一次扫描（后台异步，约 5~8 分钟）
+
+## 自动发提问帖
+
+每天 `XHS_AUTOPOST_HOURS`（默认 9、15 点）各一条：取榜单第 1 名品类 → 新建 Codex 会话
+（`danger-full-access`，cwd=`XHS_WORK_CWD`）→ 写一个门槛低、易搭话的问题 → 用
+`workbench/tools/textcard.mjs` 生成**纯文字卡片图**（本地渲染，不用 AI 生图）→ 调 `xiaohongshu` MCP
+`publish_content` 发布（可见范围 `XHS_AUTOPOST_VISIBILITY`）。同一时段当天只发一次。
+
+- `POST /api/xhs-radar/autopost` — 立即发一条（body `{visibility}`，默认「仅自己可见」，用于试发）
+
+小红书 MCP 部署在 `~/workProjects/xiaohongshu-mcp`（Docker，`127.0.0.1:18060`）。
 
 ## 后续（frp 公网）
 

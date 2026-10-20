@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getLatestSnapshot, runScan, isScanning } from './xhs-radar.mjs';
 import {
-  HOTSPOT_CWD, XHS_AUTOPOST, XHS_AUTOPOST_HOURS, XHS_AUTOPOST_METRIC, XHS_AUTOPOST_VISIBILITY,
+  XHS_WORK_CWD, XHS_AUTOPOST, XHS_AUTOPOST_HOURS, XHS_AUTOPOST_METRIC, XHS_AUTOPOST_VISIBILITY,
 } from './config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,24 +22,33 @@ export function topKeyword(snapshot, metric = XHS_AUTOPOST_METRIC) {
   return list[0] || null;
 }
 
-export function buildPostPrompt(k, { visibility = XHS_AUTOPOST_VISIBILITY, slotLabel = '' } = {}) {
+const TEXTCARD = '~/workProjects/personal-workbench/workbench/tools/textcard.mjs';
+const IMG_DIR = '~/workProjects/xiaohongshu-mcp/images';
+
+function buildQuestionPrompt(k, { visibility, slotLabel }) {
   return [
-    `【自动发帖任务${slotLabel ? ' · ' + slotLabel : ''}】本次主题品类：${k.kw}`,
+    `【自动发帖任务 · 提问帖${slotLabel ? ' · ' + slotLabel : ''}】本次主题品类：${k.kw}`,
     '',
-    '背景：这是一个人人都有的普通小红书账号，不是博主号、不是营销号。要写的是一篇**像本人随手记录生活**的图文笔记。',
+    '这是一个普通人的小红书账号。今天发一条「提问帖」：抛出一个大家愿意搭话的问题，靠评论互动。',
     '',
-    '硬性要求（务必遵守）：',
-    '1. 第一人称，像跟朋友随口聊天、讲一件刚发生的小事：要有具体的时间、地点、场景、心情和小细节，别空泛。',
-    '2. 用「讲故事」的方式写，不要写成清单体/干货体/教程体；不要小标题、不要大段 emoji、不要「姐妹们/宝子们/家人们」这类博主话术。',
-    '3. 不要有引导性、不要营销感：不劝人买东西、不喊「快收藏」「码住」「评论区聊聊」，结尾不要强行升华，自然收住就行（一句小感慨或小玩笑都可以）。',
-    '4. 绝对不要有 AI 味：不要「首先/其次/总之/值得一提」，不要工整排比和书面腔；允许口语、短句、语气词，甚至可以有点小啰嗦、小跑题。',
-    '5. 标题也要像随手取的（≤20 字），陈述句或生活化感叹即可，不要标题党式悬念。',
-    '6. 配图 2~4 张，要「手机随手拍」的质感（用 imagegen 生成时也保持生活化，不要精修大片感、不要明显 AI 感），存到 ~/workProjects/xiaohongshu-mcp/images/，发布时用容器内路径 /app/images/<文件名>。',
-    `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」。`,
-    `8. 可先用 search_feeds 搜「${k.kw}」看几条热帖，只感受语感，严禁照抄。`,
+    '要求：',
+    `1. 结合品类「${k.kw}」，想一个具体、生活化、门槛低的问题——看到就想说一句的那种；不要宏大、不要说教、不要引战。`,
+    '2. 第一人称，像自己真的在纠结/好奇/想吐槽某件事，可以带一句自己的情况做铺垫。',
+    '3. 只用口语，不要博主腔（不要「姐妹们/宝子们/家人们」），不要 AI 腔（不要「首先/其次/总之」、不要工整排比）。',
+    '4. 正文 2~4 句：铺垫 + 问题。结尾可以轻轻问一句「你们呢」，但不要「评论区告诉我/快收藏/码住」这类硬引导。',
+    '5. 标题 ≤20 字，就是问题本身或它的精简版。',
+    '6. 配图用**纯文字卡片**（严禁 AI 生图、严禁照片），用本地脚本生成：',
+    `   node ${TEXTCARD} --text "<问题>" [--sub "<一句小字>"] --out ${IMG_DIR}/ask-<短标识>.png`,
+    '   生成 1~2 张（例如一张主问题、一张补充），确认图片生成成功（脚本会在 stdout 打印路径）。',
+    `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
+    `8. 可先用 search_feeds 搜「${k.kw}」感受一下语感，严禁照抄。`,
     '',
-    '最后把：标题、正文、标签、配图文件名、发布结果 简要回报给我。',
+    '最后回报：标题、正文、标签、图片文件名、发布结果。',
   ].join('\n');
+}
+
+export function buildPostPrompt(k, { visibility = XHS_AUTOPOST_VISIBILITY, slotLabel = '' } = {}) {
+  return buildQuestionPrompt(k, { visibility, slotLabel });
 }
 
 async function post({ codex, log, visibility, slotLabel, reason }) {
@@ -54,7 +63,7 @@ async function post({ codex, log, visibility, slotLabel, reason }) {
   const top = topKeyword(snap);
   if (!top) return { ok: false, error: '榜单为空' };
   await codex.ensureReady();
-  const r = await codex.request('thread/start', { cwd: HOTSPOT_CWD, sandbox: 'danger-full-access', approvalPolicy: 'never' });
+  const r = await codex.request('thread/start', { cwd: XHS_WORK_CWD, sandbox: 'danger-full-access', approvalPolicy: 'never' });
   const threadId = r.thread.id;
   const text = buildPostPrompt(top, { visibility, slotLabel });
   await codex.request('turn/start', { threadId, input: [{ type: 'text', text, text_elements: [] }] });
