@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../api';
 import ThreadView from './ThreadView.jsx';
 import External from './External.jsx';
-import Alarm from './Alarm.jsx';
 
 function relTime(sec) {
   if (!sec) return '';
@@ -84,14 +83,6 @@ function Overview({ threads, running, services, pinned, recent, onPick }) {
 
       <div className="dsec-title">快捷入口</div>
       <div className="dquick">
-        <button className="dquickcard" onClick={() => onPick({ type: 'alarm' })}>
-          <span className="dq-ico">📞</span>
-          <span className="dq-body">
-            <span className="dq-name">起床闹钟</span>
-            <span className="dq-sub">定时打电话喊你起床</span>
-          </span>
-          <span className="dq-go">→</span>
-        </button>
         {pinned.map((p) => (
           <button key={p.threadId} className="dquickcard" onClick={() => onPick({ type: 'thread', id: p.threadId })}>
             <span className="dq-ico">🚀</span>
@@ -160,13 +151,12 @@ export default function Desktop({ models, onLogout }) {
   }, [refresh]);
 
   function titleFor(item) {
-    if (item.type === 'alarm') return '起床闹钟';
     if (item.type === 'external') return item.service?.label || '服务';
     const t = threads.find((x) => x.id === item.id);
     return t ? (t.name || (t.preview || '').slice(0, 24) || '会话') : '会话';
   }
   function open(item) {
-    const key = item.type === 'thread' ? `thread:${item.id}` : item.type === 'alarm' ? 'alarm' : `svc:${item.service.id}`;
+    const key = item.type === 'thread' ? `thread:${item.id}` : `svc:${item.service.id}`;
     setTabs((prev) => (prev.some((t) => t.key === key) ? prev : [...prev, { key, ...item, title: titleFor(item) }]));
     setActive(key);
   }
@@ -220,10 +210,6 @@ export default function Desktop({ models, onLogout }) {
               <i className={`stdot ${s.online ? 'on' : 'off'}`} />
             </button>
           ))}
-          <button className={`dnavitem ${active === 'alarm' ? 'on' : ''}`} onClick={() => open({ type: 'alarm' })}>
-            <span className="di">📞</span>
-            <span className="dlbl">起床闹钟</span>
-          </button>
         </div>
 
         <div className="dsearch">
@@ -283,9 +269,7 @@ export default function Desktop({ models, onLogout }) {
               {t.type === 'thread'
                 ? <ThreadView id={t.id} models={models} onBack={() => closeTab(t.key)}
                     onOpenThread={(id) => open({ type: 'thread', id })} />
-                : t.type === 'alarm'
-                  ? <Alarm onBack={() => closeTab(t.key)} />
-                  : <External service={t.service} onBack={() => closeTab(t.key)} />}
+                : <External service={t.service} onBack={() => closeTab(t.key)} />}
             </div>
           ))}
         </div>

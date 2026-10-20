@@ -1,7 +1,7 @@
 # Personal Workbench · 个人工作台
 
 用**手机或桌面浏览器**远程操作本机的 Codex（发布任务 / 看会话），并内嵌本机其它服务
-（数据查询、服务器发布终端、起床闹钟等）。同一套 Web 应用按屏幕宽度自适应：
+（数据查询、服务器发布终端等）。同一套 Web 应用按屏幕宽度自适应：
 窄屏为「移动工作台」，宽屏（≥ 900px）为「桌面工作台」。
 
 ## 组成与端口
@@ -19,7 +19,7 @@
 ```
 personal-workbench/
 ├── workbench/            # 网关 + 前端（端口 8080）
-│   ├── server/           # Express 网关：codex app-server 转发、SSE、代理、闹钟
+│   ├── server/           # Express 网关：codex app-server 转发、SSE、代理
 │   └── web/              # React 前端（构建产物在 web/dist）
 ├── services/
 │   ├── db-query/         # 数据查询（8777）
@@ -67,7 +67,7 @@ npm run build        # 产出 web/dist（网关直接托管）
    - 支持三种带法：页面登录框输入 / URL 加 `?token=codex-mobile` / Cookie(`cm_token`)。
    - 想改令牌：网关环境变量 `ACCESS_TOKEN=你的令牌`。
 
-> 手机端首页：罗列功能入口（Codex 会话 / 项目发布 / 数据查询 / 服务器终端 / 起床闹钟…）。
+> 手机端首页：罗列功能入口（Codex 会话 / 项目发布 / 数据查询 / 服务器终端…）。
 > 点「Codex」后**按项目分组**展示会话；「项目发布」是独立的高频入口。
 
 ## 各服务手动运行
@@ -102,7 +102,6 @@ launchctl bootstrap gui/$U ~/Library/LaunchAgents/com.yangjinlong.codex-mobile.p
 - **项目发布**：独立入口，配合 `services/deploy-tools` 完成「构建→上传→重启→健康检查」。
 - **数据查询**：内嵌 8777 页面，自然语言转 SQL。
 - **服务器终端**：内嵌 8778 的 Web 终端（tmux 承载，断线不丢会话）。
-- **起床闹钟**：到点触发呼叫/推送（通道见 `workbench/README.md` 的 VOICE_PROVIDER）。
 
 ## 隐私与安全
 

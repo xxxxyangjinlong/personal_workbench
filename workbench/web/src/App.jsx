@@ -7,7 +7,6 @@ import Desktop from './components/Desktop.jsx';
 import Sessions from './components/Sessions.jsx';
 import ThreadView from './components/ThreadView.jsx';
 import External from './components/External.jsx';
-import Alarm from './components/Alarm.jsx';
 
 function useWide(query = '(min-width: 900px)') {
   const [wide, setWide] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : false));
@@ -52,7 +51,6 @@ export default function App() {
           onOpenCodex={() => setView({ name: 'codex' })}
           onOpenThread={(id) => setView({ name: 'thread', id, from: 'home' })}
           onOpenService={(s) => setView({ name: 'external', service: s })}
-          onOpenAlarm={() => setView({ name: 'alarm' })}
           onLogout={logout}
         />
       )}
@@ -68,7 +66,6 @@ export default function App() {
         />
       )}
       {view.name === 'external' && <External service={view.service} onBack={() => setView({ name: 'home' })} />}
-      {view.name === 'alarm' && <Alarm onBack={() => setView({ name: 'home' })} />}
     </div>
   );
 }

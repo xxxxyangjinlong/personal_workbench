@@ -81,33 +81,6 @@ npm run dev
 | `TTYD_BASE` | /term | 反代基础路径 |
 | `TMUX_SESSION` | main | tmux 会话名 |
 
-## 起床闹钟（到点呼叫/推送）
-
-到点触发一个「喊起床」通道。通道由环境变量 `VOICE_PROVIDER` 选择。
-
-| 通道 | 类型 | 费用 | 说明 |
-| --- | --- | --- | --- |
-| `mock` | 模拟 | 免费 | 只记日志，不真的响（默认） |
-| `ifttt` | 网络电话 | 免费 | IFTTT 用网络电话呼叫你的手机（需装 IFTTT App），无需手机号 |
-| `bark` | 推送 | 免费 | iOS，`BARK_URL` |
-| `ntfy` | 推送 | 免费 | 安卓/iOS，`NTFY_URL` |
-| `serverchan` | 推送 | 免费 | 微信，`SERVERCHAN_KEY` |
-| `telegram` | 推送 | 免费 | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` |
-| `twilio` | 电话 | 付费 | 真运营商电话，`TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM` |
-
-### IFTTT 网络电话（免费，个人可用）
-
-1. 手机安装 **IFTTT** App 并登录（与网页同一账号）。
-2. 打开 https://ifttt.com/maker_webhooks/settings ，复制 **key**（形如 `abcdEFGH...`）。
-3. 新建 Applet：**If Webhooks → Receive a web request**（Event Name 填 `wakeup`）→
-   **Then VoIP Calls → Call my device**（Message 填 `{{Value1}}`）。
-4. 服务器设 `VOICE_PROVIDER=ifttt`、`IFTTT_KEY=<你的key>`、`IFTTT_EVENT=wakeup`（默认即 wakeup）。
-
-到点即调用 `POST https://maker.ifttt.com/trigger/<event>/with/key/<key>`，
-IFTTT 会呼叫你的手机并通过 TTS 朗读内容。
-
-接口：`GET/POST /api/alarms`、`PATCH/DELETE /api/alarms/:id`、`POST /api/alarms/:id/test`（试拨）。
-
 ## 会话写锁与「不同步」
 
 Codex 的会话正文存在本机共享库（`~/.codex/state_5.sqlite` + `thread_history_1.sqlite`），

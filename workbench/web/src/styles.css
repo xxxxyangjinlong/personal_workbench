@@ -335,22 +335,6 @@ textarea { resize: none; max-height: 40vh; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumbx { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font-size: 13px; line-height: 1; display: flex; align-items: center; justify-content: center; }
 
-/* 起床闹钟 */
-.notice { margin: 12px 16px 4px; padding: 10px 12px; border-radius: 10px; background: #fff7e6; border: 1px solid #f2d9a8; color: #8a5a00; font-size: 12.5px; line-height: 1.5; }
-.alarmlist { list-style: none; margin: 4px 0 0; padding: 0; }
-.alarmrow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.alarmrow.off { opacity: .55; }
-.atime { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 58px; }
-.abody { flex: 1; min-width: 0; }
-.alabel { font-weight: 600; font-size: 14px; }
-.asub { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aacts { display: flex; gap: 4px; flex: none; }
-button.tiny { padding: 5px 9px; font-size: 12px; border-radius: 8px; }
-.dayrow { display: flex; gap: 6px; }
-.day { flex: 1; background: var(--card); color: var(--fg); border-radius: 8px; padding: 7px 0; font-size: 13px; }
-.day.on { background: var(--accent); color: #fff; }
-.muted.small { font-size: 12px; }
-
 /* ================= 桌面端视觉升级（v3） ================= */
 :root {
   --accent-soft: #eef0ff;

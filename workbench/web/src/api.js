@@ -41,9 +41,4 @@ export const api = {
   deleteThread: (id) => req(`/api/threads/${id}`, { method: 'DELETE' }),
   archiveThread: (id) => req(`/api/threads/${id}/archive`, { method: 'POST', body: '{}' }),
   respond: (body) => req('/api/respond', { method: 'POST', body: JSON.stringify(body) }),
-  alarms: () => req('/api/alarms'),
-  addAlarm: (body) => req('/api/alarms', { method: 'POST', body: JSON.stringify(body) }),
-  updateAlarm: (id, body) => req(`/api/alarms/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  deleteAlarm: (id) => req(`/api/alarms/${id}`, { method: 'DELETE' }),
-  testAlarm: (id) => req(`/api/alarms/${id}/test`, { method: 'POST', body: '{}' }),
 };

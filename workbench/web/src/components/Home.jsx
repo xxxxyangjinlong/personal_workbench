@@ -12,7 +12,7 @@ function relTime(sec) {
   return `${dt.getMonth() + 1}月${dt.getDate()}日`;
 }
 
-export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenAlarm, onLogout }) {
+export default function Home({ onOpenCodex, onOpenThread, onOpenService, onLogout }) {
   const [services, setServices] = useState([]);
   const [pinned, setPinned] = useState([]);
   const [threadsById, setThreadsById] = useState({});
@@ -74,14 +74,6 @@ export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenA
 
         <div className="listhead">功能</div>
         <ul className="functlist">
-          <li onClick={() => onOpenAlarm && onOpenAlarm()}>
-            <span className="fico">📞</span>
-            <div className="ftext">
-              <div className="fname">起床闹钟</div>
-              <div className="fsub">定时打电话喊你起床</div>
-            </div>
-            <span className="chev">›</span>
-          </li>
           {pinned.map((p) => {
                 const t = threadsById[p.threadId];
                 const isRun = running.includes(p.threadId);

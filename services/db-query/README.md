@@ -33,7 +33,7 @@
 ## 快速开始
 
 ```bash
-cd ~/workProjects/查询数据库
+cd ~/workProjects/personal-workbench/services/db-query
 
 # 1) 罗列所有数据源（按项目/配置分组）
 python3 dbquery.py list

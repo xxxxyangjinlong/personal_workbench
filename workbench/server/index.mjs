@@ -9,8 +9,6 @@ import { randomUUID } from 'node:crypto';
 import { CodexClient } from './codex-client.mjs';
 import { startTtyd } from './terminal.mjs';
 import { makeProxyServer } from './proxy.mjs';
-import { list as listAlarms, add as addAlarm, update as updateAlarm, remove as removeAlarm, fire as fireAlarm, startScheduler } from './alarm.mjs';
-import { VOICE_PROVIDER, KIND } from './voice.mjs';
 import {
   CODEX_BIN, PORT, ACCESS_TOKEN, DEFAULT_CWD, DEFAULT_SANDBOX, DEFAULT_APPROVAL, DEFAULT_MODEL,
   TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS,
@@ -304,27 +302,6 @@ if (TERMINAL_ENABLED) {
   });
 }
 
-// ---------- 起床闹钟 ----------
-app.get('/api/alarms', auth, (_req, res) => res.json({ data: listAlarms(), provider: VOICE_PROVIDER, kind: KIND }));
-app.post('/api/alarms', auth, (req, res) => {
-  const { time, to } = req.body || {};
-  if (!/^\d{2}:\d{2}$/.test(time || '')) return res.status(400).json({ error: 'time 需为 HH:MM' });
-  if (KIND === 'call' && !String(to || '').trim()) return res.status(400).json({ error: '电话通道需要手机号 to' });
-  res.json({ alarm: addAlarm(req.body) });
-});
-app.patch('/api/alarms/:id', auth, (req, res) => {
-  const a = updateAlarm(req.params.id, req.body || {});
-  if (!a) return res.status(404).json({ error: 'not found' });
-  res.json({ alarm: a });
-});
-app.delete('/api/alarms/:id', auth, (req, res) => res.json({ ok: removeAlarm(req.params.id) }));
-app.post('/api/alarms/:id/test', auth, async (req, res) => {
-  const a = listAlarms().find((x) => x.id === req.params.id);
-  if (!a) return res.status(404).json({ error: 'not found' });
-  try { res.json({ result: await fireAlarm(a) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // ---------- static web build ----------
 // ---------- 本地图片（Markdown 里引用的本机绝对路径，只读）----------
 const IMG_MIME = {
@@ -383,7 +360,6 @@ for (const svc of EXTRA_SERVICES) {
   s.on('error', (err) => console.error(`[svc] ${svc.label} failed:`, err.message));
 }
 
-startScheduler();
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`codex-mobile server on http://0.0.0.0:${PORT}`);
   console.log(`codex bin: ${CODEX_BIN}`);
