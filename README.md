@@ -116,8 +116,12 @@ done
 - **数据查询**：内嵌 8777 页面，自然语言转 SQL。
 - **服务器终端**：内嵌 8778 的 Web 终端（tmux 承载，断线不丢会话）。
 - **小红书热门**：每天自动抓 22 个品类的「最多点赞」笔记，按**热度 / 收藏率 / 转发率**排榜；
-  并按榜单第 1 名，每天 **9:00 / 15:00 各自动发一条提问帖**（纯文字卡片图，不靠 AI 生图）。
-  数据按天归档在 `workbench/data/xhs-radar/`（配合本机 `~/workProjects/xiaohongshu-mcp` 的小红书 MCP）。
+  并按榜单第 1 名自动发帖，计划 **9:00 提问帖 / 15:00 AI 分享**（`XHS_AUTOPOST_PLAN` 可改）。
+  - 提问帖主题取榜第 1 名，且**同品类隔天不重复**（避让最近 `XHS_ROTATE_DAYS` 天，默认 2）。
+  - 配图统一用**本地文字卡**（`workbench/tools/textcard.mjs`），不靠 AI 生图、不用假照片。
+  - 另可发**热点人物观点**（手动/偶尔）：在 `~/workProjects/xhs-hotspot/figure-topics.txt` 按
+    `名字 :: 观点 :: 图片URL(可空)` 逐行添加；有真实照片就用照片，没有就文字卡。界面「试发」按钮均可先发「仅自己可见」验收。
+  - 数据按天归档在 `workbench/data/xhs-radar/`（配合本机 `~/workProjects/xiaohongshu-mcp` 的小红书 MCP）。
 
 ## 隐私与安全
 
