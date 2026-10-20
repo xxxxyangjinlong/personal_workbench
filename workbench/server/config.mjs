@@ -37,8 +37,12 @@ export const XHS_RADAR_HOUR = Number(process.env.XHS_RADAR_HOUR || 8);
 
 // 「每天自动发小红书提问帖」：默认开；早/晚两个时间点（整点触发）；主题取榜单第 1 名
 export const XHS_AUTOPOST = (process.env.XHS_AUTOPOST || 'on') !== 'off';
-export const XHS_AUTOPOST_HOURS = (process.env.XHS_AUTOPOST_HOURS || '9,15')
-  .split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n <= 23);
+// 发帖计划：几点发什么类型。question=提问帖，ai=AI 分享
+export const XHS_AUTOPOST_PLAN = (process.env.XHS_AUTOPOST_PLAN || '9=question,15=ai')
+  .split(',').map((s) => s.trim()).filter(Boolean)
+  .map((s) => { const [h, t] = s.split('='); return { hour: Number(h), type: (t || 'question').trim() }; })
+  .filter((p) => Number.isInteger(p.hour) && p.hour >= 0 && p.hour <= 23);
+export const XHS_AUTOPOST_HOURS = XHS_AUTOPOST_PLAN.map((p) => p.hour);
 export const XHS_AUTOPOST_METRIC = process.env.XHS_AUTOPOST_METRIC || 'medLikes'; // medLikes | medCol | medSh
 export const XHS_AUTOPOST_VISIBILITY = process.env.XHS_AUTOPOST_VISIBILITY || '公开可见'; // 或「仅自己可见」
 

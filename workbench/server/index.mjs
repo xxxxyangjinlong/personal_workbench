@@ -139,7 +139,8 @@ app.post('/api/xhs-radar/run', auth, (_req, res) => {
 app.post('/api/xhs-radar/autopost', auth, async (req, res) => {
   try {
     const visibility = (req.body && req.body.visibility) || '仅自己可见';
-    const r = await xhsPostNow({ codex, visibility });
+    const type = (req.body && req.body.type) || 'question';
+    const r = await xhsPostNow({ codex, visibility, type });
     res.json({ ok: true, ...r });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });

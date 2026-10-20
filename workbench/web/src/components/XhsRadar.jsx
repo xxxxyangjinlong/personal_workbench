@@ -34,10 +34,10 @@ export default function XhsRadar({ onBack, onOpenThread }) {
     try { await api.xhsRadarRun(); load(); } catch (e) { setErr(e.message); }
   }
 
-  async function tryPost() {
-    setBusy('__post');
+  async function tryPost(type) {
+    setBusy('__' + type);
     try {
-      const r = await api.xhsRadarPost('仅自己可见');
+      const r = await api.xhsRadarPost('仅自己可见', type);
       if (r.threadId) onOpenThread(r.threadId);
       else window.alert('试发失败：' + (r.error || '未知错误'));
     } catch (e) { window.alert('试发失败：' + e.message); }
@@ -73,9 +73,11 @@ export default function XhsRadar({ onBack, onOpenThread }) {
 
       <div className="hscroll">
         {err && <div className="error pad">{err}</div>}
-        {autoTop && (
+        {ap.plan && (
           <div className="hauto">
-            自动发帖：<b>提问帖</b> · 主题 <b>{autoTop.kw}</b>（{apLabel}第 1 名）· 每天 {(ap.hours || []).map((h) => h + ':00').join(' / ')} · 今日 {(ap.doneToday || []).length}/{(ap.hours || []).length}
+            每日自动发：{(ap.plan || []).map((p) => `${p.hour}:00 ${p.type === 'ai' ? 'AI分享' : '提问帖'}`).join(' · ')}
+            {autoTop && <>（提问帖主题 <b>{autoTop.kw}</b>·{apLabel}第 1 名）</>}
+            · 今日 {(ap.doneToday || []).length}/{(ap.plan || []).length}
           </div>
         )}
         {!latest && !data?.scanning && (
@@ -105,8 +107,11 @@ export default function XhsRadar({ onBack, onOpenThread }) {
         )}
       </div>
       <div className="hfoot">
-        <span className="hfoot-line">榜单每日 {data?.hour ?? 8} 点更新 · 自动发帖每天 {(ap.hours || []).map((h) => h + ':00').join(' / ')}</span>
-        <button className="hfoot-btn" onClick={tryPost} disabled={!!busy}>{busy === '__post' ? '发起中…' : '试发一篇（仅自己可见）'}</button>
+        <span className="hfoot-line">榜单每日 {data?.hour ?? 8} 点更新 · 试发均为「仅自己可见」</span>
+        <div className="hfoot-row">
+          <button className="hfoot-btn" onClick={() => tryPost('question')} disabled={!!busy}>{busy === '__question' ? '发起中…' : '试发提问帖'}</button>
+          <button className="hfoot-btn" onClick={() => tryPost('ai')} disabled={!!busy}>{busy === '__ai' ? '发起中…' : '试发 AI 分享'}</button>
+        </div>
       </div>
     </div>
   );
