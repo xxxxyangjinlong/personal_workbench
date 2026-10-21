@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { getLatestSnapshot, runScan, isScanning } from './xhs-radar.mjs';
 import {
   XHS_WORK_CWD, XHS_AUTOPOST, XHS_AUTOPOST_SLOTS, XHS_AUTOPOST_ROTATION, XHS_AUTOPOST_PLAN,
-  XHS_AUTOPOST_METRIC, XHS_AUTOPOST_VISIBILITY, XHS_FIGURE_TOPICS_FILE, XHS_ROTATE_DAYS,
+  XHS_AUTOPOST_METRIC, XHS_AUTOPOST_VISIBILITY, XHS_FIGURE_TOPICS_FILE, XHS_ROTATE_DAYS, DEVLOG_LOOKBACK_DAYS,
 } from './config.mjs';
+import { collectCommits, anonymize } from './devlog.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data', 'xhs-radar');
@@ -208,16 +209,59 @@ function buildCustomPrompt({ topic, images = [] }, { visibility, timeLabel }) {
   return lines.join('\n');
 }
 
+function collectDevlog() {
+  const today = collectCommits({ since: 'midnight' });
+  const base = today.commits.length ? { commits: today.commits, scope: '今天提交的' } : { commits: collectCommits({ since: `${DEVLOG_LOOKBACK_DAYS} days ago` }).commits, scope: `最近 ${DEVLOG_LOOKBACK_DAYS} 天提交的` };
+  const names = [...new Set(base.commits.map((c) => c.repo))];
+  base.commits = base.commits.map((c) => ({ ...c, subject: anonymize(c.subject, names) }));
+  return base;
+}
+
+function buildDevlogPrompt(info, { visibility, slotLabel }) {
+  const tr = timeRule(slotLabel);
+  const lines = [
+    `【自动发帖任务 · 代码日常${slotLabel ? ' · ' + slotLabel : ''}】`,
+    '',
+    '这是一个程序员的小红书账号。今天发一条「我最近写了点啥」的日常，像跟朋友随口唠唠手头的活，顺便和大家聊聊。',
+    '',
+    `素材（本人最近的代码提交，共 ${info.commits.length} 条，${info.scope}）：`,
+    ...info.commits.map((c) => `- ${c.subject}`),
+  ];
+  if (tr) lines.push('', tr);
+  lines.push(
+    '',
+    '要求：',
+    '1. 从素材里挑 **1~2 件**最有意思 / 最有共情的，用第一人称讲：在做什么、卡在哪、怎么绕过去的。别罗列所有提交。',
+    '2. 用大白话，像跟同事唠嗑；不要博主腔、专家腔、AI 腔；不要「首先 / 其次 / 总之」。',
+    '3. 【保密·必须遵守】帖子里**绝对不要**出现任何公司名、项目名、产品名、内部系统名、人名、接口 / 域名 / URL、代码片段、具体业务数据；一律抽象成通用说法（比如「公司的一个后台服务」「一个内部工具」「一个页面」）。宁可写得不具体，也绝不能露内部信息。',
+    '4. 结尾真诚抛一个小问题，邀请大家聊聊（比如「你们平时遇到这种会怎么弄」），但不要「评论区告诉我 / 收藏 / 码住」这类硬引导。',
+    '5. 正文 4~7 句，标题 ≤20 字，可以带点自嘲或烟火气。',
+    '6. 配图用**纯文字卡片**（严禁 AI 生图、严禁照片），用本地脚本生成：',
+    `   node ${TEXTCARD} --text "<一句话主题>" --points "<要点1|要点2|要点3>" [--sub "<一句小字>"] --out ${IMG_DIR}/dev-<短标识>.png`,
+    `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
+    '',
+    ANTI_AI,
+    '',
+    '最后回报：标题、正文、标签、图片文件名、发布结果。',
+  );
+  return lines.join('\n');
+}
+
 export function buildPostPrompt(ctx, { visibility = XHS_AUTOPOST_VISIBILITY, slotLabel = '', type = 'question' } = {}) {
   if (type === 'ai') return buildAiSharePrompt({ visibility, slotLabel });
   if (type === 'figure') return buildFigurePrompt(ctx, { visibility, slotLabel });
+  if (type === 'devlog') return buildDevlogPrompt(ctx, { visibility, slotLabel });
   return buildQuestionPrompt(ctx, { visibility, slotLabel });
 }
 
 async function post({ codex, log, visibility, slotLabel, reason, type = 'question' }) {
   const state = loadState();
   let k = { kw: 'AI' };
-  if (type === 'figure') {
+  if (type === 'devlog') {
+    const info = collectDevlog();
+    if (!info.commits.length) return { ok: true, skipped: true, kw: '(无提交)', type, visibility };
+    k = { kw: '代码日常', devlog: info };
+  } else if (type === 'figure') {
     const fig = pickFigure();
     if (!fig) return { ok: false, error: `未配置热点人物，请在 ${XHS_FIGURE_TOPICS_FILE} 添加（每行：名字 :: 观点 :: 图片URL）` };
     k = { kw: fig.name, figure: fig };
@@ -237,7 +281,7 @@ async function post({ codex, log, visibility, slotLabel, reason, type = 'questio
   await codex.ensureReady();
   const r = await codex.request('thread/start', { cwd: XHS_WORK_CWD, sandbox: 'danger-full-access', approvalPolicy: 'never' });
   const threadId = r.thread.id;
-  const ctx = type === 'figure' ? k.figure : k;
+  const ctx = type === 'devlog' ? k.devlog : type === 'figure' ? k.figure : k;
   const text = buildPostPrompt(ctx, { visibility, slotLabel, type });
   await codex.request('turn/start', { threadId, input: [{ type: 'text', text, text_elements: [] }] });
   log(`[autopost] 已发起：类型=${type}，主题=${k.kw}，可见=${visibility}，会话=${threadId}`);
@@ -302,7 +346,7 @@ export function startAutopost({ codex }) {
   const t = setInterval(() => tick({ codex, log: console.log }), 10 * 60 * 1000);
   t.unref?.();
   tick({ codex, log: console.log });
-  const label = (x) => (x === 'ai' ? 'AI分享' : x === 'figure' ? '人物观点' : '提问帖');
+  const label = (x) => (x === 'ai' ? 'AI分享' : x === 'figure' ? '人物观点' : x === 'devlog' ? '代码日常' : '提问帖');
   console.log(`[autopost] 时段：${XHS_AUTOPOST_SLOTS.map(slotKey).join(' / ')} · 类型轮换：${(XHS_AUTOPOST_ROTATION || []).map(label).join(' / ')}（${XHS_AUTOPOST_VISIBILITY}）· 提问帖避让最近 ${XHS_ROTATE_DAYS} 天同品类`);
 }
 

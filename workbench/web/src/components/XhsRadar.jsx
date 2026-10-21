@@ -12,7 +12,7 @@ const METRICS = [
   { id: 'medCol', label: '收藏率', val: (k) => pct(k.medCol) },
   { id: 'medSh', label: '转发率', val: (k) => pct(k.medSh) },
 ];
-const TYPE_LABEL = (t) => (t === 'ai' ? 'AI分享' : t === 'figure' ? '人物观点' : '提问帖');
+const TYPE_LABEL = (t) => (t === 'ai' ? 'AI分享' : t === 'figure' ? '人物观点' : t === 'devlog' ? '代码日常' : '提问帖');
 const MAX_IMGS = 9;
 
 // 上传前压缩到最长边 1600，避免发大图（也更快）
@@ -181,7 +181,7 @@ export default function XhsRadar({ onBack, onOpenThread }) {
         <span className="hfoot-line">榜单每日 {data?.hour ?? 8} 点更新 · 试发均为「仅自己可见」</span>
         <div className="hfoot-row">
           <button className="hfoot-btn" onClick={() => tryPost('question')} disabled={!!busy}>{busy === '__question' ? '发起中…' : '试发提问帖'}</button>
-          <button className="hfoot-btn" onClick={() => tryPost('ai')} disabled={!!busy}>{busy === '__ai' ? '发起中…' : '试发 AI 分享'}</button>
+          <button className="hfoot-btn" onClick={() => tryPost('devlog')} disabled={!!busy}>{busy === '__devlog' ? '发起中…' : '试发代码日常'}</button>
           <button className="hfoot-btn" onClick={() => tryPost('figure')} disabled={!!busy}>{busy === '__figure' ? '发起中…' : '试发人物观点'}</button>
         </div>
       </div>

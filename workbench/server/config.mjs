@@ -45,9 +45,9 @@ export const XHS_AUTOPOST_SLOTS = (process.env.XHS_AUTOPOST_SLOTS || '10:00,19:3
 export const XHS_AUTOPOST_HOURS = XHS_AUTOPOST_SLOTS.map((p) => p.hour);
 // 内容类型轮换池：question=提问帖，ai=AI 分享，figure=热点人物观点。
 // 每天把池里的类型「洗牌」后分配到各时段，避免老把同一类型固定在同一时间点。
-export const XHS_AUTOPOST_ROTATION = (process.env.XHS_AUTOPOST_ROTATION || 'question,ai')
+export const XHS_AUTOPOST_ROTATION = (process.env.XHS_AUTOPOST_ROTATION || 'question,devlog')
   .split(',').map((s) => s.trim()).filter(Boolean)
-  .map((t) => (['question', 'ai', 'figure'].includes(t) ? t : 'question'));
+  .map((t) => (['question', 'ai', 'figure', 'devlog'].includes(t) ? t : 'question'));
 // 可选：显式指定覆盖轮换，格式 HH[:MM]=type,...（例：10:00=question,19:30=ai）；留空则用上面的轮换
 export const XHS_AUTOPOST_PLAN = (process.env.XHS_AUTOPOST_PLAN || '')
   .split(',').map((s) => s.trim()).filter(Boolean)
@@ -74,3 +74,10 @@ export const XHS_ROTATE_DAYS = Number(process.env.XHS_ROTATE_DAYS || 2);
 
 // 小红书 MCP 的图片目录（宿主机）——对应容器内 /app/images
 export const XHS_IMG_DIR = process.env.XHS_IMG_DIR || path.join(os.homedir(), 'workProjects', 'xiaohongshu-mcp', 'images');
+
+// 「代码日常」帖取材的 git 仓库根目录（用 : 分隔可覆盖）
+export const DEVLOG_ROOTS = (process.env.DEVLOG_ROOTS
+  ? process.env.DEVLOG_ROOTS.split(':').filter(Boolean)
+  : ['workProjects', 'IdeaProjects', 'PycharmProjects', 'CodeBuddy', 'rustProjects', 'minprogram', 'PyCharmMiscProject']
+    .map((d) => path.join(os.homedir(), d)));
+export const DEVLOG_LOOKBACK_DAYS = Number(process.env.DEVLOG_LOOKBACK_DAYS || 3);
