@@ -10,15 +10,15 @@ import { CodexClient } from './codex-client.mjs';
 import { startTtyd } from './terminal.mjs';
 import { makeProxyServer } from './proxy.mjs';
 import { runScan as xhsRunScan, getLatestSnapshot, radarMeta, startScheduler as startXhsRadar } from './xhs-radar.mjs';
-import { autopostMeta, postNow as xhsPostNow, startAutopost } from './xhs-autopost.mjs';
+import { autopostMeta, postNow as xhsPostNow, postCustom as xhsPostCustom, startAutopost } from './xhs-autopost.mjs';
 import {
   CODEX_BIN, PORT, ACCESS_TOKEN, DEFAULT_CWD, DEFAULT_SANDBOX, DEFAULT_APPROVAL, DEFAULT_MODEL,
-  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS, XHS_WORK_CWD,
+  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS, XHS_WORK_CWD, XHS_IMG_DIR,
 } from './config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: '30mb' }));
+app.use(express.json({ limit: '80mb' }));
 
 // ---------- helpers ----------
 function getToken(req) {
@@ -142,6 +142,29 @@ app.post('/api/xhs-radar/autopost', auth, async (req, res) => {
     const type = (req.body && req.body.type) || 'question';
     const r = await xhsPostNow({ codex, visibility, type });
     res.json({ ok: true, ...r });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// 自定义发帖：用户手填主题 + 可选上传图片（base64 dataURL）
+app.post('/api/xhs-radar/custom', auth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const topic = String(b.topic || '');
+    const visibility = b.visibility || '公开可见';
+    const images = Array.isArray(b.images) ? b.images : [];
+    if (!topic.trim() && !images.length) return res.status(400).json({ ok: false, error: '请填写内容或上传图片' });
+    mkdirSync(XHS_IMG_DIR, { recursive: true });
+    const stamp = Date.now();
+    const saved = [];
+    images.slice(0, 9).forEach((img, i) => {
+      const m = String((img && img.dataUrl) || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (!m) return;
+      const ext = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }[m[1]]) || 'png';
+      const name = `custom-${stamp}-${i}.${ext}`;
+      try { writeFileSync(path.join(XHS_IMG_DIR, name), Buffer.from(m[2], 'base64')); saved.push(name); } catch {}
+    });
+    const r = await xhsPostCustom({ codex, visibility, topic, images: saved });
+    res.json({ ok: true, ...r, images: saved });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 

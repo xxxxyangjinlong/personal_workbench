@@ -124,6 +124,8 @@ done
   - 配图统一用**本地文字卡**（`workbench/tools/textcard.mjs`），不靠 AI 生图、不用假照片。
   - 另可发**热点人物观点**（手动/偶尔）：在 `~/workProjects/xhs-hotspot/figure-topics.txt` 按
     `名字 :: 观点 :: 图片URL(可空)` 逐行添加；有真实照片就用照片，没有就文字卡。界面「试发」按钮均可先发「仅自己可见」验收。
+  - 页面顶部有**自定义发帖框**：手填主题 + 可选上传图片（≤9 张，前端自动压到 1600px），
+    顺手发一条自己的内容；没上传图片就自动用文字卡。提示词与其余帖子同一套规则（反 AI 味、大白话、不引导）。
   - 数据按天归档在 `workbench/data/xhs-radar/`（配合本机 `~/workProjects/xiaohongshu-mcp` 的小红书 MCP）。
 
 ## 隐私与安全

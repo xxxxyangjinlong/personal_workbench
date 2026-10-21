@@ -71,3 +71,6 @@ export const PINNED_SESSIONS = [
 export const XHS_FIGURE_TOPICS_FILE = process.env.XHS_FIGURE_TOPICS_FILE || path.join(XHS_WORK_CWD, 'figure-topics.txt');
 // 提问帖「同品类隔天不重复」：避开最近 N 天（不含今天）已用过的品类
 export const XHS_ROTATE_DAYS = Number(process.env.XHS_ROTATE_DAYS || 2);
+
+// 小红书 MCP 的图片目录（宿主机）——对应容器内 /app/images
+export const XHS_IMG_DIR = process.env.XHS_IMG_DIR || path.join(os.homedir(), 'workProjects', 'xiaohongshu-mcp', 'images');

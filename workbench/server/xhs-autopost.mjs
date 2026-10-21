@@ -175,6 +175,39 @@ function buildFigurePrompt(figure, { visibility, slotLabel }) {
   return lines.join('\n');
 }
 
+function buildCustomPrompt({ topic, images = [] }, { visibility, timeLabel }) {
+  const tr = timeRule(timeLabel);
+  const lines = [
+    '【自动发帖任务 · 自定义】',
+    '',
+    '这是一个程序员 / 普通人的小红书账号。用户自己给了想发的主题或想法，请把它写成一条自然的小红书帖子。',
+    '',
+    `用户想发的内容：${topic || '（见用户上传的图片）'}`,
+  ];
+  if (tr) lines.push('', tr);
+  if (images.length) {
+    lines.push('', `用户上传了 ${images.length} 张真实图片（已经在图片目录里）：${images.join('、')}。配图直接用这些图片，路径用容器内路径 /app/images/<文件名>；**不要**用 AI 生图、也不要另外造图。标题需要的话可再补一张文字卡。`);
+  } else {
+    lines.push('', '用户没有上传图片。配图用本地文字卡（严禁 AI 生图、严禁照片）：');
+    lines.push(`   node ${TEXTCARD} --text "<一句话主题>" [--sub "<一句小字>"] --out ${IMG_DIR}/custom-<短标识>.png`);
+  }
+  lines.push(
+    '',
+    '要求：',
+    '1. 以用户给的原意为准，不要改变意思；但要把话改得更口语、更像真人随手发的，不要写成营销文案。',
+    '2. 第一人称、口语；不要博主腔、专家腔、AI 腔。',
+    '3. 不要引导性：不放链接、不喊「关注我 / 评论区 / 码住 / 收藏」、不推销任何产品或课程。',
+    '4. 正文 3~7 句，别太长；标题 ≤20 字。',
+    '5. 用大家都能听懂的大白话：别堆专业术语；万一非提某个词，就顺带用一句人话解释。',
+    `6. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
+    '',
+    ANTI_AI,
+    '',
+    '最后回报：标题、正文、标签、图片文件名、发布结果。',
+  );
+  return lines.join('\n');
+}
+
 export function buildPostPrompt(ctx, { visibility = XHS_AUTOPOST_VISIBILITY, slotLabel = '', type = 'question' } = {}) {
   if (type === 'ai') return buildAiSharePrompt({ visibility, slotLabel });
   if (type === 'figure') return buildFigurePrompt(ctx, { visibility, slotLabel });
@@ -214,6 +247,22 @@ async function post({ codex, log, visibility, slotLabel, reason, type = 'questio
 /** 供 /api/xhs-radar/autopost 手动触发（默认仅自己可见以便试发） */
 export async function postNow({ codex, visibility = '仅自己可见', slotLabel = '手动试发', type = 'question' }) {
   return post({ codex, log: console.log, visibility, slotLabel, reason: 'manual', type });
+}
+
+/** 自定义主题发帖（用户手填内容 + 可选上传图片） */
+export async function postCustom({ codex, visibility = '公开可见', topic = '', images = [] }) {
+  const t = String(topic || '').trim();
+  if (!t && !images.length) return { ok: false, error: '请填写内容或上传图片' };
+  const now = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const timeLabel = `${p(now.getHours())}:${p(now.getMinutes())}`;
+  await codex.ensureReady();
+  const r = await codex.request('thread/start', { cwd: XHS_WORK_CWD, sandbox: 'danger-full-access', approvalPolicy: 'never' });
+  const threadId = r.thread.id;
+  const text = buildCustomPrompt({ topic: t, images }, { visibility, timeLabel });
+  await codex.request('turn/start', { threadId, input: [{ type: 'text', text, text_elements: [] }] });
+  console.log(`[autopost] 已发起：类型=custom，可见=${visibility}，图片=${images.length}，会话=${threadId}`);
+  return { ok: true, threadId, type: 'custom', visibility };
 }
 
 async function tick({ codex, log }) {

@@ -35,6 +35,7 @@ export const api = {
   xhsRadar: () => req('/api/xhs-radar'),
   xhsRadarRun: () => req('/api/xhs-radar/run', { method: 'POST', body: '{}' }),
   xhsRadarPost: (visibility, type) => req('/api/xhs-radar/autopost', { method: 'POST', body: JSON.stringify({ visibility, type }) }),
+  xhsRadarCustom: (body) => req('/api/xhs-radar/custom', { method: 'POST', body: JSON.stringify(body) }),
   createThread: (body = {}) => req('/api/threads', { method: 'POST', body: JSON.stringify(body) }),
   thread: (id) => req(`/api/threads/${id}`),
   turns: (id, q = '') => req(`/api/threads/${id}/turns${q}`),

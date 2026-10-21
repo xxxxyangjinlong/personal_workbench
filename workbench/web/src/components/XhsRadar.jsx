@@ -12,12 +12,30 @@ const METRICS = [
   { id: 'medCol', label: '收藏率', val: (k) => pct(k.medCol) },
   { id: 'medSh', label: '转发率', val: (k) => pct(k.medSh) },
 ];
+const TYPE_LABEL = (t) => (t === 'ai' ? 'AI分享' : t === 'figure' ? '人物观点' : '提问帖');
+const MAX_IMGS = 9;
+
+// 上传前压缩到最长边 1600，避免发大图（也更快）
+async function fileToDataUrl(file, maxDim = 1600) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  const type = scale === 1 && file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+  return { name: file.name, dataUrl: canvas.toDataURL(type, 0.9) };
+}
 
 export default function XhsRadar({ onBack, onOpenThread }) {
   const [data, setData] = useState(null);
   const [metric, setMetric] = useState('medLikes');
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
+  const [compose, setCompose] = useState('');
+  const [imgs, setImgs] = useState([]);
+  const [postVis, setPostVis] = useState('公开可见');
 
   const load = useCallback(() => {
     api.xhsRadar().then((d) => { setData(d); setErr(''); }).catch((e) => setErr(e.message));
@@ -41,6 +59,26 @@ export default function XhsRadar({ onBack, onOpenThread }) {
       if (r.threadId) onOpenThread(r.threadId);
       else window.alert('试发失败：' + (r.error || '未知错误'));
     } catch (e) { window.alert('试发失败：' + e.message); }
+    finally { setBusy(''); }
+  }
+
+  async function onPick(e) {
+    const files = [...(e.target.files || [])].slice(0, MAX_IMGS - imgs.length);
+    e.target.value = '';
+    const out = [];
+    for (const f of files) { try { out.push(await fileToDataUrl(f)); } catch { /* 忽略坏图 */ } }
+    if (out.length) setImgs((a) => [...a, ...out].slice(0, MAX_IMGS));
+  }
+
+  async function sendCustom() {
+    const topic = compose.trim();
+    if (!topic && !imgs.length) return;
+    setBusy('__custom');
+    try {
+      const r = await api.xhsRadarCustom({ topic, visibility: postVis, images: imgs.map(({ name, dataUrl }) => ({ name, dataUrl })) });
+      if (r.threadId) { setCompose(''); setImgs([]); onOpenThread(r.threadId); }
+      else window.alert('发布失败：' + (r.error || '未知错误'));
+    } catch (e) { window.alert('发布失败：' + e.message); }
     finally { setBusy(''); }
   }
 
@@ -72,11 +110,43 @@ export default function XhsRadar({ onBack, onOpenThread }) {
       </div>
 
       <div className="hscroll">
+        <div className="hcompose">
+          <textarea
+            className="hcompose-ta"
+            rows={2}
+            placeholder="想发点什么？写个主题或想法就行，配图可选～"
+            value={compose}
+            onChange={(e) => setCompose(e.target.value)}
+          />
+          {imgs.length > 0 && (
+            <div className="hcompose-imgs">
+              {imgs.map((im, i) => (
+                <span className="hcompose-img" key={i}>
+                  <img src={im.dataUrl} alt="" />
+                  <button type="button" className="hcompose-del" onClick={() => setImgs((a) => a.filter((_, j) => j !== i))}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="hcompose-row">
+            <label className="hcompose-file" title="上传图片">
+              + 图片
+              <input type="file" accept="image/*" multiple hidden onChange={onPick} />
+            </label>
+            <button type="button" className="hcompose-vis" onClick={() => setPostVis((v) => (v === '公开可见' ? '仅自己可见' : '公开可见'))}>
+              {postVis === '公开可见' ? '公开' : '仅自己'}
+            </button>
+            <button type="button" className="hcompose-send" disabled={busy === '__custom' || (!compose.trim() && !imgs.length)} onClick={sendCustom}>
+              {busy === '__custom' ? '发布中…' : '发布'}
+            </button>
+          </div>
+        </div>
+
         {err && <div className="error pad">{err}</div>}
         {ap.slots && (
           <div className="hauto">
             每日自动发：{(ap.slots || []).map((p) => `${p.hour}:${String(p.minute || 0).padStart(2, '0')}`).join(' / ')}
-            · 类型每天轮换：{(ap.rotation || []).map((t) => (t === 'ai' ? 'AI分享' : t === 'figure' ? '人物观点' : '提问帖')).join(' / ')}
+            · 类型每天轮换：{(ap.rotation || []).map(TYPE_LABEL).join(' / ')}
             {autoTop && <>（提问帖主题 <b>{autoTop.kw}</b>·{apLabel}第 1 名）</>}
             · 今日 {(ap.doneToday || []).length}/{(ap.slots || []).length}
           </div>
