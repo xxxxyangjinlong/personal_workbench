@@ -11,10 +11,20 @@ const MCP_URL = process.env.XHS_MCP_URL || 'http://127.0.0.1:18060/mcp';
 let sid = null;
 let rid = 0;
 let running = false;
+let runningSince = 0;
 let lastError = null;
 let lastRunAt = 0;
 
-export const isScanning = () => running;
+const STALE_MS = 20 * 60 * 1000; // 扫描超过 20 分钟视为卡死，自动复位
+function markStale() {
+  if (running && runningSince && Date.now() - runningSince > STALE_MS) {
+    running = false; runningSince = 0;
+    lastError = '上一次扫描超时，已自动重置';
+    console.warn('[xhs-radar] 扫描超时，已重置 running 标志');
+  }
+}
+
+export const isScanning = () => { markStale(); return running; };
 
 function today() {
   const d = new Date();
@@ -82,11 +92,13 @@ async function scanKeyword(kw) {
 }
 
 export async function runScan({ reason = 'manual' } = {}) {
+  markStale();
   if (running) return { ok: false, error: 'already running' };
-  running = true; lastError = null;
+  running = true; runningSince = Date.now(); lastError = null;
   try {
     const keywords = [];
     for (const kw of XHS_KEYWORDS) {
+      if (Date.now() - runningSince > 18 * 60 * 1000) { lastError = '扫描超过 18 分钟，提前结束'; break; }
       try { keywords.push(await scanKeyword(kw)); }
       catch (err) { keywords.push({ kw, n: 0, err: String(err?.message || err) }); }
       await new Promise((r) => setTimeout(r, 1200));
@@ -103,20 +115,20 @@ export async function runScan({ reason = 'manual' } = {}) {
     lastError = String(err?.message || err);
     console.error('[xhs-radar] 失败:', lastError);
     return { ok: false, error: lastError };
-  } finally { running = false; }
+  } finally { running = false; runningSince = 0; }
 }
 
 export function getLatestSnapshot() {
   try {
     if (!existsSync(DATA_DIR)) return null;
-    const files = readdirSync(DATA_DIR).filter((f) => f.endsWith('.json')).sort();
+    const files = readdirSync(DATA_DIR).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
     if (!files.length) return null;
     return JSON.parse(readFileSync(path.join(DATA_DIR, files[files.length - 1]), 'utf8'));
   } catch { return null; }
 }
 
 export function listSnapshots() {
-  try { return existsSync(DATA_DIR) ? readdirSync(DATA_DIR).filter((f) => f.endsWith('.json')).sort().map((f) => f.replace('.json', '')) : []; }
+  try { return existsSync(DATA_DIR) ? readdirSync(DATA_DIR).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().map((f) => f.replace('.json', '')) : []; }
   catch { return []; }
 }
 
@@ -134,5 +146,6 @@ export function startScheduler() {
 }
 
 export function radarMeta() {
-  return { scanning: running, lastError, lastRunAt, keywords: XHS_KEYWORDS, hour: XHS_RADAR_HOUR, dates: listSnapshots() };
+  markStale();
+  return { scanning: running, runningSince: running ? runningSince : 0, lastError, lastRunAt, keywords: XHS_KEYWORDS, hour: XHS_RADAR_HOUR, dates: listSnapshots() };
 }
