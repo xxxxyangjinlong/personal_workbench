@@ -48,6 +48,12 @@ export function collectCommits({ since = 'midnight', limit = 40 } = {}) {
 export function anonymize(text, names = []) {
   let s = String(text || '');
   for (const n of names) { if (n && n.length > 2) s = s.split(n).join('本项目'); }
-  s = s.replace(/https?:\/\/\S+/g, '').replace(/\b[0-9a-f]{7,40}\b/g, '');
-  return s.trim();
+  s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g, ' ');       // 邮箱
+  s = s.replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, ' ');            // IP
+  s = s.replace(/\b[A-Z]{2,10}-\d+\b/g, ' ');                    // 工单号（JIRA-123）
+  s = s.replace(/https?:\/\/\S+/g, ' ').replace(/www\.\S+/g, ' '); // URL
+  s = s.replace(/(?:\.?\/(?:[\w.-]+)){2,}/g, ' ');              // 文件/接口路径
+  s = s.replace(/\b[0-9a-f]{7,40}\b/g, ' ');                    // commit 哈希
+  s = s.replace(/\b\d{6,}\b/g, ' ');                          // 长数字（ID）
+  return s.replace(/\s{2,}/g, ' ').trim();
 }
