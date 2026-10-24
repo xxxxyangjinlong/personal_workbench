@@ -10,6 +10,7 @@
 | --- | --- | --- | --- |
 | 网关 + 前端 | `workbench/` | **8080** | Node(Express) 网关 + React(Vite)，对外只暴露这一个端口 |
 | Codex app-server | 常驻进程（launchd 托管） | 8123 | `codex app-server --listen ws://127.0.0.1:8123`，**长活**；网关用 WS 连它，网关重启不影响正在跑的任务 |
+| LLM 清洗代理 | `workbench/server/llm-proxy.mjs` | 8199 | app-server → 127.0.0.1:8199 → 公司网关；剥掉公司网关不认识的请求字段（`reasoning.summary`、`client_metadata`），见「常见问题」 |
 | 数据查询 | `services/db-query/` | 8777 | Python，跨项目数据库自然语言查询 |
 | 发布 / 服务器终端 | `services/deploy-tools/` | 8778 | Python，一句话发布 + Web 终端 |
 
@@ -94,6 +95,7 @@ cd services/deploy-tools && ./start.sh 8778    # 8778
 | --- | --- |
 | `com.yangjinlong.codex-appserver` | 长活 Codex app-server（8123，KeepAlive） |
 | `com.yangjinlong.codex-mobile` | 网关（8080，`node --watch`） |
+| `com.yangjinlong.llm-proxy` | LLM 清洗代理（8199，KeepAlive；上游 `LLM_UPSTREAM` 在 plist 里改） |
 
 改动后重载（网关可直接用 `./scripts/restart.sh`）：
 
@@ -138,6 +140,14 @@ done
 
 ## 常见问题
 
+- **web 端新建会话报 `json: unknown field "summary"`（400）**：ChatGPT.app 打包的 codex（0.164-alpha）走 Responses API 时会带
+  `reasoning.summary`、`client_metadata` 等字段，公司网关（Go 严格解析）遇到未知字段直接 400；桌面 App 走的是另一套后端所以没事。
+  解法即 **8199 清洗代理**：cc-switch 里「公司Ark」供应商的 `base_url` 指向 `http://127.0.0.1:8199/v1`，代理剥掉这些字段再转发
+  （若网关日后又报未知字段，代理会自动删除该字段重试）。日志在 `workbench/logs/llm-proxy.out.log`。
+- **cc-switch 切换后旧会话 503（`No available channel for model …`）**：旧会话的模型名随会话文件走（如 `deepseek-v4.1-flash`），
+  网关地址却用当前配置；新网关没开该模型通道就会 503。已由 8199 代理的**模型别名改写**解决：
+  `LLM_MODEL_ALIASES`（plist 里配置）把旧模型名转发前改写成新模型，web 端与桌面端共用一份 config.toml，因此一并生效。
+  以后新增别名（模型又换了）直接改 plist 里的 `LLM_MODEL_ALIASES`（逗号分隔多条），`launchctl bootout + bootstrap` 重载即可。
 - **改代码 / 重启网关会不会中断正在跑的任务**：不会。任务在**长活 app-server** 进程里执行（launchd 托管 `com.yangjinlong.codex-appserver`，端口 8123），网关只是它的客户端；重启网关仅断开并重连 WS，任务照常跑完。重启网关用 `./scripts/restart.sh`。
 - **手机端与电脑端会话「不同步 / 正在电脑端使用中」**：Codex 会话在某个 app-server 里会驻留内存副本并持有独占写锁。
   网关启动 app-server 时默认带 `-c thread_unload_delay_secs=30`，会话空闲 30 秒后自动卸载、释放锁。

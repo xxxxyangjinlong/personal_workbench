@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/yangjinlong</string>
+		<key>LLM_PROXY_PORT</key>
+		<string>8199</string>
+		<key>LLM_UPSTREAM</key>
+		<string>https://aigw-dist03.wondersgroup.com</string>
+		<key>LLM_MODEL_ALIASES</key>
+		<string>deepseek-v4.1-flash=Ark-DeepSeek-V4.1-Flash</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.yangjinlong.llm-proxy</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/node</string>
+		<string>/Users/yangjinlong/workProjects/personal-workbench/workbench/server/llm-proxy.mjs</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/yangjinlong/workProjects/personal-workbench/workbench/logs/llm-proxy.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/yangjinlong/workProjects/personal-workbench/workbench/logs/llm-proxy.out.log</string>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/yangjinlong/workProjects/personal-workbench/workbench</string>
+</dict>
+</plist>
