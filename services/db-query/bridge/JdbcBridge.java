@@ -87,6 +87,24 @@ public class JdbcBridge {
             return r;
         }
         if (conn == null) throw new SQLException("未连接数据库，请先 connect");
+        // —— 事务控制（写语句“预览→回滚 / 确认→提交”用）——
+        if ("begin".equals(action)) {
+            conn.setAutoCommit(false);
+            r.put("ok", true);
+            return r;
+        }
+        if ("commit".equals(action)) {
+            conn.commit();
+            conn.setAutoCommit(true);
+            r.put("ok", true);
+            return r;
+        }
+        if ("rollback".equals(action)) {
+            conn.rollback();
+            conn.setAutoCommit(true);
+            r.put("ok", true);
+            return r;
+        }
         if ("query".equals(action)) {
             String sql = str(req.get("sql"));
             int maxRows = req.get("maxRows") != null ? ((Number) req.get("maxRows")).intValue() : 200;
@@ -172,6 +190,23 @@ public class JdbcBridge {
             r.put("columns", cols);
             return r;
         }
+        if ("primaryKeys".equals(action)) {
+            String table = str(req.get("table"));
+            String reqSchema = str(req.get("schema"));
+            String schema = (reqSchema != null && !reqSchema.isEmpty()) ? reqSchema : currentSchema();
+            String catalog = conn.getCatalog();
+            List<Object> out = new ArrayList<>();
+            for (String sch : new String[]{schema, schema != null ? schema.toUpperCase() : null, schema != null ? schema.toLowerCase() : null, null}) {
+                if (out.isEmpty()) {
+                    try (ResultSet rs = conn.getMetaData().getPrimaryKeys(catalog, sch, table)) {
+                        while (rs.next()) out.add(rs.getString("COLUMN_NAME"));
+                    }
+                }
+            }
+            r.put("ok", true);
+            r.put("columns", out);
+            return r;
+        }
         if ("close".equals(action)) {
             if (conn != null) { conn.close(); conn = null; }
             r.put("ok", true);
@@ -201,6 +236,7 @@ public class JdbcBridge {
                 Map<String, Object> col = new LinkedHashMap<>();
                 col.put("name", rs.getString("COLUMN_NAME"));
                 col.put("type", rs.getString("TYPE_NAME"));
+                col.put("dataType", rs.getInt("DATA_TYPE"));
                 col.put("size", rs.getInt("COLUMN_SIZE"));
                 col.put("nullable", rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable);
                 out.add(col);

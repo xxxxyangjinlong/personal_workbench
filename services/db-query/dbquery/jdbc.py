@@ -133,6 +133,15 @@ class Bridge:
     def ping(self):
         return self.call(action="ping")
 
+    def begin(self):
+        return self.call(action="begin")
+
+    def commit(self):
+        return self.call(action="commit")
+
+    def rollback(self):
+        return self.call(action="rollback")
+
     def connect(self, url, user=None, password=None, driver=None):
         return self.call(action="connect", url=url, user=user, password=password, driver=driver)
 
@@ -150,6 +159,9 @@ class Bridge:
 
     def columns(self, table, schema=None):
         return self.call(action="columns", table=table, schema=schema).get("columns", [])
+
+    def primaryKeys(self, table, schema=None):
+        return self.call(action="primaryKeys", table=table, schema=schema).get("columns", [])
 
     def close(self):
         try:

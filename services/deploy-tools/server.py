@@ -236,12 +236,16 @@ def api_projects():
 def api_servers():
     hp = D.read_conf(D.HOSTS_FILE)
     lc = D.read_conf(LOGS_FILE) if LOGS_FILE.exists() else None
+
+    def logs_of(sec):
+        return ([{"label": k, "path": v.strip()} for k, v in lc[sec].items()]
+                if (lc and lc.has_section(sec)) else [])
+
     out = [{"alias": "local", "host": "本机", "user": getpass.getuser(),
-            "local": True, "logs": []}]
+            "local": True, "logs": logs_of("local")}]
     for s in hp.sections():
-        logs = [{"label": k, "path": v.strip()} for k, v in lc[s].items()] if (lc and lc.has_section(s)) else []
         out.append({"alias": s, "host": hp[s].get("host", "").strip(),
-                    "user": hp[s].get("user", "root").strip(), "local": False, "logs": logs})
+                    "user": hp[s].get("user", "root").strip(), "local": False, "logs": logs_of(s)})
     return {"servers": out}
 
 

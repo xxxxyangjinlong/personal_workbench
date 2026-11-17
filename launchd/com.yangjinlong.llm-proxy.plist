@@ -10,8 +10,10 @@
 		<string>8199</string>
 		<key>LLM_UPSTREAM</key>
 		<string>https://aigw-dist03.wondersgroup.com</string>
+		<key>LLM_DNS_SERVERS</key>
+		<string>10.1.1.10,10.1.1.8</string>
 		<key>LLM_MODEL_ALIASES</key>
-		<string>deepseek-v4.1-flash=Ark-DeepSeek-V4.1-Flash</string>
+		<string>deepseek-v4.1-flash=Ark-DeepSeek-V4.1-Flash,glm-5.3-flash=Ark-DeepSeek-V4.1-Flash</string>
 	</dict>
 	<key>KeepAlive</key>
 	<true/>

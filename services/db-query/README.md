@@ -26,6 +26,29 @@
 
 ![界面](docs/screenshot-query.png)
 
+## 日常使用能力（2026-11 新增）
+对标 Navicat 日常查询的三大件，电脑/手机（经 workbench 代理）都用同一套界面：
+
+- **表数据浏览**：表列表每行有 ▦ 按钮，进「数据」页签——分页（20/50/100/200 行每页）、
+  点列头排序、手写 WHERE 片段过滤（拒绝分号/注释）、页内快速过滤、点单元格复制。
+  分页语法按方言适配：MySQL/PG/DM/H2 用 `LIMIT/OFFSET`，Oracle/SQLServer 用 `OFFSET/FETCH`，
+  Hive 只支持第一页（无事务无偏移，界面会提示）。
+- **写操作防手滑**：INSERT/UPDATE/DELETE/MERGE 执行前先在事务里试跑并回滚，
+  弹窗告诉你影响行数，确认后才真执行提交；UPDATE/DELETE 不带 WHERE 直接拒绝；
+  DDL（CREATE/DROP 等）一律不执行；Hive 无事务，降级为仅确认弹窗。
+- **网格直接改数据**（有主键的表）：
+  - 双击（手机长按/右键）单元格 → 直接改值 → 回车提交，走同一套「预览影响行数 → 确认」流程；
+  - 每行首列有 🗑 删除按钮（预览应影响 1 行，不对劲会警示）；
+  - 工具栏「＋ 新增行」弹表单：空 = 用表默认值，输入 NULL = 置空，数字列自动校验；
+  - 值按列类型生成字面量（数字列裸值、字符串转义单引号），无主键的表只能去 SQL 页签改。
+- **SQL 编辑体验**：表名自动补全（输入即提示）、`表名.` 后字段补全、Ctrl+Space 手动触发；
+  执行过的 SQL 自动进历史，可收藏（★）；历史/收藏存服务端 `data/history.json`、
+  `data/favorites.json`，手机和电脑共用。
+
+新增 API：`POST /api/rows`、`POST /api/execute/preview`、`POST /api/execute/confirm`、
+`GET/POST /api/history`、`GET/POST /api/favorites`、`POST /api/pkeys`、`POST /api/buildwrite`
+（由单元格值+列类型构造类型安全的写语句）。
+
 ## 环境要求
 - Python 3.10+（依赖 `requests`、`PyYAML`）
 - JDK 8+（已在本机 `~/.m2` 里有的 JDBC 驱动即可）
@@ -104,8 +127,13 @@ docs/                 # 截图等
 
 ## 重新编译 Java 桥（改过 JdbcBridge.java 后）
 ```bash
-cd bridge && javac -d classes JdbcBridge.java
+cd bridge && javac -encoding UTF-8 -d classes JdbcBridge.java
 ```
+
+## 重启与解释器
+- 服务要用 **framework Python 3.13**（带 requests/yaml）跑：
+  `PATH=/Library/Frameworks/Python.framework/Versions/3.13/bin:$PATH ./start.sh -d`
+  （shell 里裸 `python3` 没装依赖，直接 `./start.sh` 会 ModuleNotFoundError）
 
 ## 说明
 - 内网/生产库能否连通取决于你本机网络（VPN/跳板）。工具只负责发起连接，连不上会给出明确报错。
