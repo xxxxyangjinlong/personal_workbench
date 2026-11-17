@@ -50,7 +50,11 @@ export default function Home({ onOpenCodex, onOpenThread, onOpenService, onLogou
   return (
     <div className="page">
       <header className="topbar">
-        <span className="title">移动工作台</span>
+        <span className="brandmark sm">W</span>
+        <span className="brandcopy">
+          <span className="title">工作台</span>
+          <span className="brandsub">Personal OS</span>
+        </span>
         <div className="spacer" />
         <button className="icon" onClick={onLogout} title="退出">⏏︎</button>
       </header>

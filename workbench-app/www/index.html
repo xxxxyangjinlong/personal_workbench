@@ -3,36 +3,85 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07090f">
 <title>移动工作台</title>
 <style>
-  :root{--bg:#0e1116;--panel:#161b22;--bd:#242c38;--fg:#e6edf3;--muted:#8b98a9;--acc:#4c8dff;--err:#ff6b6b}
-  *{box-sizing:border-box}
-  body{margin:0;height:100dvh;display:flex;align-items:center;justify-content:center;
-    background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-  .card{width:min(420px,90vw);text-align:center;padding:28px 20px}
-  .logo{font-size:44px}
-  h1{font-size:18px;margin:10px 0 4px}
-  .sub{color:var(--muted);font-size:12.5px;word-break:break-all}
-  .spin{width:16px;height:16px;border:2px solid #4c8dff55;border-top-color:var(--acc);border-radius:50%;
-    display:inline-block;animation:sp .7s linear infinite;vertical-align:-3px;margin-right:6px}
-  @keyframes sp{to{transform:rotate(360deg)}}
-  .status{margin-top:16px;color:var(--muted);font-size:13px;min-height:22px}
+  :root{
+    --bg:#07090f;--panel:rgba(255,255,255,.045);--panel-2:rgba(255,255,255,.075);
+    --bd:rgba(255,255,255,.1);--bd-2:rgba(255,255,255,.16);
+    --fg:#eef1f7;--muted:#8e96a9;--faint:#606878;
+    --gold:#d8b878;--gold-2:#b9904e;--gold-ink:#ead6a9;--err:#ff7d86;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    padding:max(24px,env(safe-area-inset-top)) 22px max(24px,env(safe-area-inset-bottom));
+    background:
+      radial-gradient(560px 420px at 50% -12%,rgba(216,184,120,.17),transparent 68%),
+      radial-gradient(520px 420px at 50% 112%,rgba(73,101,210,.15),transparent 68%),
+      var(--bg);
+    color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden;
+  }
+  .card{
+    position:relative;width:min(400px,100%);padding:32px 26px 24px;text-align:left;
+    border:1px solid var(--bd-2);border-radius:26px;
+    background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.022) 48%,rgba(255,255,255,.04));
+    box-shadow:0 30px 90px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.08) inset;
+    -webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);overflow:hidden;
+  }
+  .card::after{
+    content:'';position:absolute;right:-90px;top:-110px;width:250px;height:250px;border-radius:50%;
+    border:1px solid rgba(216,184,120,.14);
+    box-shadow:0 0 0 32px rgba(216,184,120,.022),0 0 0 70px rgba(216,184,120,.012);
+    pointer-events:none;
+  }
+  .logo{
+    display:grid;place-items:center;width:58px;height:58px;margin-bottom:18px;border-radius:18px;
+    color:#1a1305;font-size:26px;font-weight:800;letter-spacing:-.05em;
+    background:linear-gradient(145deg,#f4e3b9,#d5af6c 58%,#b48643);
+    box-shadow:0 1px 0 rgba(255,255,255,.55) inset,0 14px 34px rgba(0,0,0,.4);
+  }
+  .kicker{font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);font-weight:600}
+  h1{font-size:31px;line-height:1.12;letter-spacing:-.035em;font-weight:650;margin:5px 0 8px}
+  .sub{
+    display:inline-flex;align-items:center;gap:7px;max-width:100%;
+    color:var(--muted);font-size:11.5px;line-height:1.5;word-break:break-all;
+    padding:5px 10px;border:1px solid var(--bd);border-radius:999px;background:rgba(255,255,255,.025);
+  }
+  .sub::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 9px rgba(216,184,120,.6);flex:none}
+  .status{margin-top:18px;color:var(--muted);font-size:12.5px;min-height:22px;display:flex;align-items:center;gap:7px}
   .status.err{color:var(--err)}
-  .setup{display:none;margin-top:14px;text-align:left}
+  .spin{
+    width:14px;height:14px;border:1.5px solid rgba(216,184,120,.22);border-top-color:var(--gold);
+    border-radius:50%;display:inline-block;animation:sp .75s linear infinite;flex:none;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .setup{display:none;margin-top:16px;text-align:left;padding-top:16px;border-top:1px solid var(--bd)}
   .setup.on{display:block}
-  .setup label{display:block;color:var(--muted);font-size:12px;margin:10px 0 4px}
-  .setup input{width:100%;padding:10px 12px;border-radius:10px;background:var(--panel);
-    border:1px solid var(--bd);color:var(--fg);font-size:13px;outline:none}
-  .setup input:focus{border-color:var(--acc)}
-  .setup button{margin-top:12px;width:100%;padding:11px;border:none;border-radius:10px;
-    background:var(--acc);color:#fff;font-size:14px;font-weight:600;cursor:pointer}
-  .setup .hint{color:var(--muted);font-size:11px;margin-top:8px}
-  .gear{margin-top:26px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
+  .setup label{display:block;color:var(--muted);font-size:11px;letter-spacing:.04em;margin:0 0 6px}
+  .setup input{
+    width:100%;padding:12px 13px;border-radius:12px;background:rgba(255,255,255,.05);
+    border:1px solid var(--bd-2);color:var(--fg);font:inherit;font-size:12.5px;outline:none;
+  }
+  .setup input:focus{border-color:rgba(216,184,120,.58);box-shadow:0 0 0 3px rgba(216,184,120,.12)}
+  .setup button{
+    margin-top:11px;width:100%;padding:12px;border:none;border-radius:12px;
+    color:#191307;font:inherit;font-size:13.5px;font-weight:650;cursor:pointer;
+    background:linear-gradient(135deg,#ecd8a6,#d3ad69 52%,#bd914c);
+    box-shadow:0 1px 0 rgba(255,255,255,.38) inset,0 12px 26px rgba(0,0,0,.3);
+  }
+  .setup button:active{transform:translateY(1px)}
+  .setup .hint{color:var(--faint);font-size:10.5px;line-height:1.55;margin-top:9px}
+  .gear{margin-top:20px;color:var(--faint);font-size:11px;cursor:pointer;display:inline-block;letter-spacing:.02em}
+  .gear:active{color:var(--gold)}
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="logo">🧭</div>
+  <div class="logo">W</div>
+  <div class="kicker">Personal Workbench</div>
   <h1>移动工作台</h1>
   <div class="sub" id="addr"></div>
   <div class="status" id="status"><span class="spin"></span>正在连接…</div>

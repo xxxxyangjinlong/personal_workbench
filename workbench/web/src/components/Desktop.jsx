@@ -217,7 +217,10 @@ export default function Desktop({ models, onLogout }) {
   return (
     <div className="desk">
       <aside className="deskside">
-        <div className="dbrand" onClick={() => setActive(null)} title="回到概览" style={{ cursor: 'pointer' }}>🧭 桌面工作台</div>
+        <div className="dbrand" onClick={() => setActive(null)} title="回到概览">
+          <span className="brandmark">W</span>
+          <span className="dbrand-copy"><b>Workbench</b><small>Personal OS</small></span>
+        </div>
 
         <div className="dnav">
           {modules.map((m) => (

@@ -21,19 +21,23 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="login">
-      <h1>工作台</h1>
-      <p className="muted">输入访问令牌以连接本机 Codex</p>
-      <form onSubmit={submit}>
-        <input
-          type="password"
-          placeholder="访问令牌"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          autoFocus
-        />
-        <button disabled={busy || !value}>{busy ? '登录中…' : '登录'}</button>
-      </form>
-      {error && <div className="error">{error}</div>}
+      <div className="login-card">
+        <div className="login-mark">W</div>
+        <div className="login-kicker">Personal Workbench</div>
+        <h1>欢迎回来</h1>
+        <p className="muted">输入访问令牌，连接本机 Codex</p>
+        <form onSubmit={submit}>
+          <input
+            type="password"
+            placeholder="访问令牌"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus
+          />
+          <button disabled={busy || !value}>{busy ? '登录中…' : '进入工作台'}</button>
+        </form>
+        {error && <div className="error">{error}</div>}
+      </div>
     </div>
   );
 }
