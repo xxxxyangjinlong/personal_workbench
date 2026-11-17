@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>移动工作台</title>
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--bd:#242c38;--fg:#e6edf3;--muted:#8b98a9;--acc:#4c8dff;--err:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;height:100dvh;display:flex;align-items:center;justify-content:center;
+    background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .card{width:min(420px,90vw);text-align:center;padding:28px 20px}
+  .logo{font-size:44px}
+  h1{font-size:18px;margin:10px 0 4px}
+  .sub{color:var(--muted);font-size:12.5px;word-break:break-all}
+  .spin{width:16px;height:16px;border:2px solid #4c8dff55;border-top-color:var(--acc);border-radius:50%;
+    display:inline-block;animation:sp .7s linear infinite;vertical-align:-3px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .status{margin-top:16px;color:var(--muted);font-size:13px;min-height:22px}
+  .status.err{color:var(--err)}
+  .setup{display:none;margin-top:14px;text-align:left}
+  .setup.on{display:block}
+  .setup label{display:block;color:var(--muted);font-size:12px;margin:10px 0 4px}
+  .setup input{width:100%;padding:10px 12px;border-radius:10px;background:var(--panel);
+    border:1px solid var(--bd);color:var(--fg);font-size:13px;outline:none}
+  .setup input:focus{border-color:var(--acc)}
+  .setup button{margin-top:12px;width:100%;padding:11px;border:none;border-radius:10px;
+    background:var(--acc);color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+  .setup .hint{color:var(--muted);font-size:11px;margin-top:8px}
+  .gear{margin-top:26px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🧭</div>
+  <h1>移动工作台</h1>
+  <div class="sub" id="addr"></div>
+  <div class="status" id="status"><span class="spin"></span>正在连接…</div>
+  <div class="setup" id="setup">
+    <label>工作台服务器地址</label>
+    <input id="urlInput" placeholder="http://100.103.226.87:8080" autocomplete="off">
+    <button id="saveBtn">保存并连接</button>
+    <div class="hint">Tailscale 开启时用 100.x 地址；公网域名上线后填域名地址</div>
+  </div>
+  <div class="gear" id="gear">服务器设置</div>
+</div>
+<script>
+const DEFAULT = 'http://100.103.226.87:8080';
+const $ = s => document.querySelector(s);
+const addr = () => localStorage.getItem('server_url') || DEFAULT;
+
+async function probe(url) {
+  // no-cors 探测：能建立连接即认为可达（opaque 响应，读不了状态码）
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 5000);
+  try {
+    await fetch(url + '/api/health', { mode: 'no-cors', signal: ctl.signal, cache: 'no-store' });
+    clearTimeout(t);
+    return true;
+  } catch (e) {
+    clearTimeout(t);
+    return false;
+  }
+}
+
+function showSetup(errMsg) {
+  const st = $('#status');
+  st.className = 'status err';
+  st.textContent = errMsg || '无法连接服务器';
+  $('#setup').classList.add('on');
+  $('#urlInput').value = addr();
+}
+
+async function go(url) {
+  $('#status').className = 'status';
+  $('#status').innerHTML = '<span class="spin"></span>已连通，进入工作台…';
+  setTimeout(() => { location.replace(url); }, 300);
+}
+
+(async () => {
+  const url = addr();
+  $('#addr').textContent = url;
+  const ok = await probe(url);
+  if (ok) { go(url); return; }
+  // 再试一次（VPN 刚启动时路由可能没就绪）
+  await new Promise(r => setTimeout(r, 2500));
+  if (await probe(url)) { go(url); return; }
+  showSetup('连接不上服务器（Tailscale 开了吗？）');
+})();
+
+$('#gear').onclick = () => { $('#setup').classList.add('on'); $('#urlInput').value = addr(); };
+$('#saveBtn').onclick = async () => {
+  let u = $('#urlInput').value.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//.test(u)) u = 'http://' + u;
+  if (!u) return;
+  localStorage.setItem('server_url', u);
+  $('#addr').textContent = u;
+  $('#status').className = 'status';
+  $('#status').innerHTML = '<span class="spin"></span>正在探测…';
+  if (await probe(u)) { go(u); }
+  else { $('#status').className = 'status err'; $('#status').textContent = '这个地址也连不上'; }
+};
+</script>
+</body>
+</html>

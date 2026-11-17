@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">移动工作台</string>
+    <string name="title_activity_main">移动工作台</string>
+    <string name="package_name">com.yangjinlong.workbench</string>
+    <string name="custom_url_scheme">com.yangjinlong.workbench</string>
+</resources>

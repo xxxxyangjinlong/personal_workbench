@@ -1,0 +1,13 @@
+{
+  "appId": "com.yangjinlong.workbench",
+  "appName": "移动工作台",
+  "webDir": "www",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "https",
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

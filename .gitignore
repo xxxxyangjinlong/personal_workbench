@@ -15,3 +15,12 @@ venv/
 *.secret
 .DS_Store
 dist/
+
+# Capacitor 安卓壳（构建产物与本地配置不进仓库）
+workbench-app/node_modules/
+workbench-app/android/.gradle/
+workbench-app/android/build/
+workbench-app/android/app/build/
+workbench-app/android/local.properties
+workbench-app/android/.idea/
+*.apk
