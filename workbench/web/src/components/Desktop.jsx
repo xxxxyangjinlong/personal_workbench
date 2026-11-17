@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../api';
+import { subscribe } from '../events';
 import ThreadView from './ThreadView.jsx';
 import External from './External.jsx';
-import XhsRadar from './XhsRadar.jsx';
+import ProjectDialog from './ProjectDialog';
+import TodayCard from './TodayCard';
 
 function relTime(sec) {
   if (!sec) return '';
@@ -37,7 +39,7 @@ function greeting() {
   return '晚上好';
 }
 
-function Overview({ threads, running, services, pinned, recent, onPick }) {
+function Overview({ threads, running, services, pinned, recent, modules, onPick }) {
   const runningCount = (running || []).length;
   const online = services.filter((s) => s.online).length;
   const dateStr = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
@@ -82,16 +84,23 @@ function Overview({ threads, running, services, pinned, recent, onPick }) {
         </div>
       </div>
 
+      <TodayCard
+        onOpenThread={(id) => onPick({ type: 'thread', id })}
+        onOpenRadar={() => open({ type: 'module', id: 'xhs', title: '小红书热门' })}
+      />
+
       <div className="dsec-title">快捷入口</div>
       <div className="dquick">
-        <button className="dquickcard" onClick={() => onPick({ type: 'xhs' })}>
-          <span className="dq-ico">🍠</span>
-          <span className="dq-body">
-            <span className="dq-name">小红书热门</span>
-            <span className="dq-sub">各品类热门笔记榜 · 一键出选题</span>
-          </span>
-          <span className="dq-go">→</span>
-        </button>
+        {(modules || []).filter((m) => m.enabled).map((m) => (
+          <button key={m.id} className="dquickcard" onClick={() => onPick({ type: 'module', id: m.id, title: m.name })}>
+            <span className="dq-ico">{m.icon}</span>
+            <span className="dq-body">
+              <span className="dq-name">{m.name}</span>
+              <span className="dq-sub">{m.description || '模块功能'}{m.online === false ? ' · 离线' : ''}</span>
+            </span>
+            <span className="dq-go">→</span>
+          </button>
+        ))}
         {pinned.map((p) => (
           <button key={p.threadId} className="dquickcard" onClick={() => onPick({ type: 'thread', id: p.threadId })}>
             <span className="dq-ico">🚀</span>
@@ -138,16 +147,19 @@ function Overview({ threads, running, services, pinned, recent, onPick }) {
 export default function Desktop({ models, onLogout }) {
   const [services, setServices] = useState([]);
   const [pinned, setPinned] = useState([]);
+  const [modules, setModules] = useState([]);
   const [projects, setProjects] = useState([]);
   const [threads, setThreads] = useState([]);
   const [running, setRunning] = useState([]);
   const [q, setQ] = useState('');
+  const [projEdit, setProjEdit] = useState(null); // null | {} 新建 | { project } 编辑
   const [tabs, setTabs] = useState([]);      // [{ key, type, id?, service?, title }]
   const [active, setActive] = useState(null); // 当前标签 key；null = 首页概览
 
   const refresh = useCallback(() => {
     api.services().then((r) => { setServices(r.services || []); setPinned(r.pinned || []); setRunning(r.running || []); }).catch(() => {});
     api.projects().then((r) => setProjects(r.data || [])).catch(() => {});
+    api.modules().then((r) => setModules((r.modules || []).filter((m) => m.enabled))).catch(() => {});
     api.threads('?limit=200').then((r) => setThreads(r.data || [])).catch(() => {});
   }, []);
 
@@ -158,15 +170,18 @@ export default function Desktop({ models, onLogout }) {
     }, 5000);
     return () => clearInterval(timer);
   }, [refresh]);
+  // 项目增删改（含电脑端操作）时自动刷新
+  useEffect(() => subscribe((m) => { if (m.method === 'project/changed' || m.method === '__connected') refresh(); }), [refresh]);
 
   function titleFor(item) {
     if (item.type === 'external') return item.service?.label || '服务';
+    if (item.type === 'module') return item.title || '模块';
     if (item.type === 'xhs') return '小红书热门';
     const t = threads.find((x) => x.id === item.id);
     return t ? (t.name || (t.preview || '').slice(0, 24) || '会话') : '会话';
   }
   function open(item) {
-    const key = item.type === 'thread' ? `thread:${item.id}` : item.type === 'xhs' ? 'app:xhs' : `svc:${item.service.id}`;
+    const key = item.type === 'thread' ? `thread:${item.id}` : item.type === 'module' ? `module:${item.id}` : item.type === 'xhs' ? 'app:xhs' : `svc:${item.service.id}`;
     setTabs((prev) => (prev.some((t) => t.key === key) ? prev : [...prev, { key, ...item, title: titleFor(item) }]));
     setActive(key);
   }
@@ -205,11 +220,13 @@ export default function Desktop({ models, onLogout }) {
         <div className="dbrand" onClick={() => setActive(null)} title="回到概览" style={{ cursor: 'pointer' }}>🧭 桌面工作台</div>
 
         <div className="dnav">
-          <button className={`dnavitem ${active === 'app:xhs' ? 'on' : ''}`}
-            onClick={() => open({ type: 'xhs' })}>
-            <span className="di">🍠</span>
-            <span className="dlbl">小红书热门</span>
-          </button>
+          {modules.map((m) => (
+            <button key={m.id} className={`dnavitem ${active === `module:${m.id}` ? 'on' : ''}`}
+              onClick={() => open({ type: 'module', id: m.id, title: m.name })}>
+              <span className="di">{m.icon}</span>
+              <span className="dlbl">{m.name}</span>
+            </button>
+          ))}
           {pinned.map((p) => (
             <button key={p.threadId} className={`dnavitem ${active === `thread:${p.threadId}` ? 'on' : ''}`}
               onClick={() => open({ type: 'thread', id: p.threadId })}>
@@ -231,7 +248,11 @@ export default function Desktop({ models, onLogout }) {
           <input placeholder="搜索会话…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
 
-        <div className="dlisthead">Codex 会话</div>
+        <div className="dlisthead dlisthead-row">
+          <span>Codex 会话</span>
+          <span className="spacer" />
+          <button className="dprojadd" title="新建项目" onClick={() => setProjEdit({})}>＋ 项目</button>
+        </div>
         <div className="dlist">
           {groups.map((g) => (
             <div key={g.id} className="dgroup">
@@ -239,6 +260,9 @@ export default function Desktop({ models, onLogout }) {
                 <span className="dname">{g.name}</span>
                 <span className="dcount">{g.threads.length}</span>
                 <span className="spacer" />
+                {g.id !== '__none' && (
+                  <button className="dadd" title="编辑项目" onClick={() => setProjEdit({ project: projects.find((p) => p.id === g.id) })}>✎</button>
+                )}
                 <button className="dadd" title="在该项目新建会话" onClick={() => newThread(g.roots[0])}>＋</button>
               </div>
               {g.threads.length === 0 && <div className="dempty">暂无会话</div>}
@@ -277,20 +301,28 @@ export default function Desktop({ models, onLogout }) {
         <div className="tabbody">
           {!tab && (
             <Overview threads={threads.length} running={running} services={services}
-              pinned={pinned} recent={threads.slice(0, 6)} onPick={open} />
+              pinned={pinned} recent={threads.slice(0, 6)} modules={modules} onPick={open} />
           )}
           {tabs.map((t) => (
             <div key={t.key} className="tabpane" style={{ display: t.key === active ? 'flex' : 'none' }}>
               {t.type === 'thread'
                 ? <ThreadView id={t.id} models={models} onBack={() => closeTab(t.key)}
                     onOpenThread={(id) => open({ type: 'thread', id })} />
-                : t.type === 'xhs'
-                ? <XhsRadar onBack={() => closeTab(t.key)} onOpenThread={(id) => open({ type: 'thread', id })} />
+                : t.type === 'module'
+                ? <iframe src={`/m/${t.id}/page`} title={t.title} style={{ flex: 1, border: 0, width: '100%', background: 'var(--bg)' }} />
                 : <External service={t.service} onBack={() => closeTab(t.key)} />}
             </div>
           ))}
         </div>
       </main>
+      {projEdit && (
+        <ProjectDialog
+          project={projEdit.project || null}
+          cwds={[...new Set(threads.map((t) => t.cwd).filter(Boolean))]}
+          onClose={() => setProjEdit(null)}
+          onSaved={refresh}
+        />
+      )}
     </div>
   );
 }

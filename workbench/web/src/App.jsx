@@ -7,7 +7,6 @@ import Desktop from './components/Desktop.jsx';
 import Sessions from './components/Sessions.jsx';
 import ThreadView from './components/ThreadView.jsx';
 import External from './components/External.jsx';
-import XhsRadar from './components/XhsRadar.jsx';
 
 function useWide(query = '(min-width: 900px)') {
   const [wide, setWide] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : false));
@@ -26,7 +25,7 @@ export default function App() {
   const [view, setView] = useState(() => {
     try {
       const v = new URLSearchParams(location.search).get('view');
-      if (v === 'codex' || v === 'xhs') return { name: v };
+      if (v === 'codex') return { name: v };
     } catch {}
     return { name: 'home' };
   });
@@ -38,6 +37,13 @@ export default function App() {
     connect(token);
     fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }).catch(() => {});
   }, [token]);
+
+  // 令牌失效（如服务端轮换后）：自动回到登录页
+  useEffect(() => {
+    const onUnauth = () => { disconnect(); setTok(''); };
+    window.addEventListener('cm:unauthorized', onUnauth);
+    return () => window.removeEventListener('cm:unauthorized', onUnauth);
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -58,7 +64,6 @@ export default function App() {
           onOpenCodex={() => setView({ name: 'codex' })}
           onOpenThread={(id) => setView({ name: 'thread', id, from: 'home' })}
           onOpenService={(s) => setView({ name: 'external', service: s })}
-          onOpenRadar={() => setView({ name: 'xhs' })}
           onLogout={logout}
         />
       )}
@@ -69,14 +74,8 @@ export default function App() {
         <ThreadView
           id={view.id}
           models={modelIds}
-          onBack={() => setView(view.from === 'home' ? { name: 'home' } : view.from === 'xhs' ? { name: 'xhs' } : { name: 'codex' })}
+          onBack={() => setView(view.from === 'home' ? { name: 'home' } : { name: 'codex' })}
           onOpenThread={(nid) => setView({ name: 'thread', id: nid, from: view.from || 'codex' })}
-        />
-      )}
-      {view.name === 'xhs' && (
-        <XhsRadar
-          onBack={() => setView({ name: 'home' })}
-          onOpenThread={(id) => setView({ name: 'thread', id, from: 'xhs' })}
         />
       )}
       {view.name === 'external' && <External service={view.service} onBack={() => setView({ name: 'home' })} />}

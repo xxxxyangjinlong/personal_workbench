@@ -3,7 +3,9 @@
 // （reasoning.summary、client_metadata…，网关 Go 严格解析未知字段直接 400），
 // 这里在转发前剥掉；若仍报 unknown field "X"，自动删掉该字段重试（最多 3 次）。
 import http from 'node:http';
+import https from 'node:https';
 import { Readable } from 'node:stream';
+import dnsPromises from 'node:dns/promises';
 
 const PORT = Number(process.env.LLM_PROXY_PORT || 8199);
 const UPSTREAM = (process.env.LLM_UPSTREAM || 'https://aigw-dist03.wondersgroup.com').replace(/\/+$/, '');
@@ -15,6 +17,24 @@ const MODEL_ALIASES = {};
 for (const pair of (process.env.LLM_MODEL_ALIASES || '').split(',')) {
   const [from, to] = pair.split('=').map((s) => s && s.trim());
   if (from && to) MODEL_ALIASES[from] = to;
+}
+
+// 推理档位别名改写：不同模型支持的 effort 集合不同（如 GLM 只认 low/high/max）。
+// 格式 LLM_EFFORT_ALIASES="minimal=low,medium=high"。
+const EFFORT_ALIASES = {};
+for (const pair of (process.env.LLM_EFFORT_ALIASES || '').split(',')) {
+  const [from, to] = pair.split('=').map((s) => s && s.trim());
+  if (from && to) EFFORT_ALIASES[from] = to;
+}
+
+function rewriteEffort(body) {
+  const effort = body?.reasoning?.effort;
+  if (typeof effort !== 'string') return;
+  const to = EFFORT_ALIASES[effort] || EFFORT_ALIASES[effort.toLowerCase()];
+  if (to && to !== effort) {
+    console.log(`effort alias: ${effort} -> ${to}`);
+    body.reasoning.effort = to;
+  }
 }
 
 function rewriteModel(body) {
@@ -42,16 +62,97 @@ function stripEverywhere(obj, key) {
   for (const v of Object.values(obj)) stripEverywhere(v, key);
 }
 
-async function forwardOnce(method, path, headers, bodyBuf) {
+// ── 上游解析兜底 ─────────────────────────────────────────────
+// 公司域名（如 aigw-dist03.wondersgroup.com）是 VPN 内网记录，本机 Tailscale
+// MagicDNS(100.100.100.100) 抢了系统解析后查不到 → getaddrinfo ENOTFOUND。
+// 这里系统解析失败时自动向公司 DNS 兜底解析（LLM_DNS_SERVERS，逗号分隔），
+// 拿到 IP 直连但保留 SNI/Host；结果缓存 DNS_TTL_MS，连接类报错自动清缓存重试。
+const UP = new URL(UPSTREAM);
+const UP_HOST = UP.hostname;
+const UP_TLS = UP.protocol === 'https:';
+const UP_PORT = Number(UP.port || (UP_TLS ? 443 : 80));
+const UP_MOD = UP_TLS ? https : http;
+const DNS_SERVERS = (process.env.LLM_DNS_SERVERS || '10.1.1.10,10.1.1.8')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const DNS_TTL_MS = 5 * 60 * 1000;
+const SOCKET_RETRY_CODES = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'ECONNRESET', 'EPIPE', 'EPROTO']);
+let upIp = null, upIpAt = 0;
+
+function clearUpIp() { upIp = null; upIpAt = 0; }
+
+async function resolveUpHost() {
+  if (upIp && Date.now() - upIpAt < DNS_TTL_MS) return upIp;
+  try {
+    const { address } = await dnsPromises.lookup(UP_HOST);
+    upIp = address; upIpAt = Date.now();
+    return address;
+  } catch { /* 系统解析失败，走公司 DNS 兜底 */ }
+  for (const srv of DNS_SERVERS) {
+    try {
+      const r = new dnsPromises.Resolver({ timeout: 3000, tries: 1 });
+      r.setServers([srv]);
+      const addrs = await r.resolve4(UP_HOST);
+      if (addrs && addrs[0]) {
+        upIp = addrs[0]; upIpAt = Date.now();
+        console.log(`upstream resolved: ${UP_HOST} -> ${upIp} via ${srv}`);
+        return upIp;
+      }
+    } catch { /* 试下一个 DNS */ }
+  }
+  throw new Error(`cannot resolve upstream ${UP_HOST} (system + ${DNS_SERVERS.join('/')})`);
+}
+
+async function sendOnce(method, path, headers, bodyBuf) {
   const h = { ...headers };
   delete h.host; delete h['content-length']; delete h.connection; delete h['accept-encoding'];
   if (bodyBuf !== null) h['content-type'] = h['content-type'] || 'application/json';
-  const res = await fetch(UPSTREAM + path, {
-    method, headers: h,
-    body: bodyBuf === null ? undefined : bodyBuf,
-    duplex: bodyBuf === null ? undefined : 'half',
+  h.host = UP_PORT === 80 || UP_PORT === 443 ? UP_HOST : `${UP_HOST}:${UP_PORT}`;
+  const ip = await resolveUpHost();
+  const payload = bodyBuf === null ? undefined : bodyBuf;
+  return await new Promise((resolve, reject) => {
+    const ureq = UP_MOD.request({
+      host: ip, port: UP_PORT, method, path, headers: h,
+      ...(UP_TLS ? { servername: UP_HOST } : {}),
+    }, (ures) => {
+      const fh = new Headers();
+      for (let i = 0; i < ures.rawHeaders.length; i += 2) fh.append(ures.rawHeaders[i], ures.rawHeaders[i + 1]);
+      resolve({
+        status: ures.statusCode,
+        headers: fh,
+        body: Readable.toWeb(ures),
+        text: () => new Promise((res2, rej2) => {
+          const cs = []; ures.on('data', (c) => cs.push(c));
+          ures.on('end', () => res2(Buffer.concat(cs).toString('utf8')));
+          ures.on('error', rej2);
+        }),
+      });
+    });
+    // 连接阶段 15s 超时：IP 过期/网络抖动时快速失败并触发重解析重试
+    const connectTimer = setTimeout(() => {
+      ureq.destroy(Object.assign(new Error('upstream connect timeout'), { code: 'ETIMEDOUT' }));
+    }, 15000);
+    ureq.on('socket', (sock) => {
+      sock.once(UP_TLS ? 'secureConnect' : 'connect', () => clearTimeout(connectTimer));
+    });
+    ureq.on('error', (err) => {
+      clearTimeout(connectTimer);
+      if (SOCKET_RETRY_CODES.has(err.code)) clearUpIp(); // IP 可能过期
+      reject(err);
+    });
+    if (payload === undefined) ureq.end(); else ureq.end(payload);
   });
-  return res;
+}
+
+async function forwardOnce(method, path, headers, bodyBuf) {
+  try {
+    return await sendOnce(method, path, headers, bodyBuf);
+  } catch (err) {
+    if (SOCKET_RETRY_CODES.has(err.code)) {
+      clearUpIp();
+      return await sendOnce(method, path, headers, bodyBuf); // 重新解析后再试一次
+    }
+    throw err;
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -64,7 +165,7 @@ const server = http.createServer(async (req, res) => {
     let parsed = null;
     const isJson = (req.headers['content-type'] || '').includes('json');
     if (raw.length && isJson) {
-      try { parsed = JSON.parse(raw.toString('utf8')); defaultStrip(parsed); rewriteModel(parsed); } catch { parsed = null; }
+      try { parsed = JSON.parse(raw.toString('utf8')); defaultStrip(parsed); rewriteModel(parsed); rewriteEffort(parsed); } catch { parsed = null; }
     }
 
     let bodyBuf = parsed !== null ? Buffer.from(JSON.stringify(parsed)) : (raw.length ? raw : null);

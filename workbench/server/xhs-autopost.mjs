@@ -1,4 +1,4 @@
-// 定时自动发（默认计划 10:00 提问帖 / 19:30 AI 分享）；类型：question / ai / figure。
+// 定时自动发（周历模式：周一/三/五 10:00 提问帖 · 周二/四 19:30 热点解读 · 周日 19:30 汇总帖 · 周六留给人工干货）；类型：question / hot / figure / weekly / devlog
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,7 @@ import { getLatestSnapshot, runScan, isScanning } from './xhs-radar.mjs';
 import {
   XHS_WORK_CWD, XHS_AUTOPOST, XHS_AUTOPOST_SLOTS, XHS_AUTOPOST_ROTATION, XHS_AUTOPOST_PLAN,
   XHS_AUTOPOST_METRIC, XHS_AUTOPOST_VISIBILITY, XHS_FIGURE_TOPICS_FILE, XHS_ROTATE_DAYS, DEVLOG_LOOKBACK_DAYS,
+  XHS_QUESTIONS_FILE, XHS_PIN_COMMENT,
 } from './config.mjs';
 import { collectCommits, anonymize } from './devlog.mjs';
 
@@ -49,10 +50,23 @@ function timeRule(slotLabel) {
 // 统一的「反 AI 味」硬规则，三种帖子都要遵守
 const ANTI_AI = '【反 AI 味 · 必须遵守】写完自己读一遍，别让人一眼看出是 AI 写的：不要「首先 / 其次 / 最后 / 总之 / 值得注意的是 / 希望对你有帮助」这类套话；不要排比、对仗、句句工整；不要滥用 emoji、波浪号、感叹号；不要「让我们一起 / 宝子们 / 家人们」这种口号腔。用词口语化，允许一点口头禅和轻微的不完美，就像在微信里跟朋友随手打的一段话。';
 
+const GROWTH = [
+  '【涨粉规则 · 重点】这个号现在粉丝很少，发帖不是为了显摆干货，而是让人愿意点进来、愿意回一句、顺手关注你。',
+  '· 标题要具体、有画面：带场景/地点/数字/时间，像「早上十点的徐浦大桥」这种，别用「关于XX的一些想法」这种空标题，也别夸大标题党。',
+  '· 第一句就直接进场景，别铺垫背景：开口就是「今天在……」「刚遇到一件事」，不要「众所周知 / 随着…的发展」这种开头。',
+  '· 正文里留一个「人人有话说」的点：一个问题、一个二选一、或一个大家都有过的经历，让人看完想回一句。',
+  '· 让人记住你是个真实的人（一个爱记录生活的程序员，常在上海，能自然带上本地细节就带），但别自吹、别立「大神」人设。',
+  '· 话题标签 3~6 个：1 个大众标签（如 打工人 / 程序员 / 上海）+ 2~3 个跟正文具体内容贴合的标签；别堆一堆不相干的热门标签。',
+  '· 封面决定点击率：文字卡上放最短最抓人的那一句，字要大、好读，别把长句子塞上去。',
+  '· 绝不引导：不放链接、不留联系方式、不喊「关注我 / 收藏 / 码住 / 评论区告诉我」，平台和读者都反感，反而限流。',
+].join('\n');
+
 const TEXTCARD = '~/workProjects/personal-workbench/workbench/tools/textcard.mjs';
 const IMG_DIR = '~/workProjects/xiaohongshu-mcp/images';
 const AI_TOPICS_FILE = path.join(XHS_WORK_CWD, 'ai-topics.txt');
 const FIGURE_USED_FILE = path.join(XHS_WORK_CWD, 'figure-used.txt');
+const QUESTIONS_FILE = XHS_QUESTIONS_FILE;
+const QUESTIONS_USED_FILE = path.join(XHS_WORK_CWD, 'questions-used.txt');
 
 function recentAiTopics(n = 6) { return readLines(AI_TOPICS_FILE).slice(-n); }
 
@@ -69,6 +83,30 @@ function pickFigure() {
   return all.find((f) => !used.has(f.name)) || all[0] || null;
 }
 
+// —— 提问帖问题池：每行「问题 :: 一句小字(可空)」，已发的记入 questions-used.txt，用完从头循环 ——
+function parseQuestions() {
+  return readLines(QUESTIONS_FILE)
+    .filter((l) => !l.startsWith('#'))
+    .map((l) => { const [q, sub] = l.split('::').map((s) => (s || '').trim()); return { q, sub: sub || '' }; })
+    .filter((x) => x.q);
+}
+function pickQuestion() {
+  const used = new Set(readLines(QUESTIONS_USED_FILE));
+  const all = parseQuestions();
+  return all.find((x) => !used.has(x.q)) || all[0] || null;
+}
+
+// —— 周报上下文：本周提问帖 + 期数 + 下周问题预告（定时与手动补发共用） ——
+function weeklyCtx(state) {
+  const hist = state?.history || [];
+  const weekQs = hist
+    .filter((h) => h.type === 'question' && h.date >= dayBefore(6) && h.date <= day())
+    .map((h) => h.kw).slice(-6);
+  const seq = hist.filter((h) => h.type === 'weekly').length + 1;
+  const nq = pickQuestion();
+  return { questions: weekQs, seq, nextQuestion: nq ? nq.q : '（问题池待补充，见 questions.txt）' };
+}
+
 // —— 每天把轮换池里的类型「按天平移」分配到各时段：保证每个时段都会轮到不同类型 ——
 const dayIndex = (dateStr) => { const [y, mo, da] = dateStr.split('-').map(Number); return Math.floor(Date.UTC(y, mo - 1, da) / 86400000); };
 export function typesForDay(dateStr, n) {
@@ -83,25 +121,31 @@ function planTypeFor(slot) {
   return hit ? hit.type : null;
 }
 
-function buildQuestionPrompt(k, { visibility, slotLabel }) {
+function buildQuestionPrompt(qItem, { visibility, slotLabel }) {
   const tr = timeRule(slotLabel);
   return [
-    `【自动发帖任务 · 提问帖${slotLabel ? ' · ' + slotLabel : ''}】本次主题品类：${k.kw}`,
+    `【自动发帖任务 · 提问帖${slotLabel ? ' · ' + slotLabel : ''}】`,
     '',
-    '这是一个普通人的小红书账号。今天发一条「提问帖」：抛出一个大家愿意搭话的问题，靠评论互动。',
+    '这是一个普通人的小红书账号（爱折腾 AI 和自动化、正在搭自己的「第二大脑」）。今天发一条「提问帖」：抛出一个大家愿意搭话的问题，靠评论互动。',
     ...(tr ? ['', tr] : []),
     '',
+    `本期问题（来自选题池，核心意思不能变，措辞可以改得更口语）：${qItem.q}`,
+    ...(qItem.sub ? [`可用的小字/补充：${qItem.sub}`] : []),
+    '',
     '要求：',
-    `1. 结合品类「${k.kw}」，想一个具体、生活化、门槛低的问题——看到就想说一句的那种；不要宏大、不要说教、不要引战；且必须与上面的发布时间相符。`,
-    '2. 第一人称，像自己真的在纠结/好奇/想吐槽某件事，可以带一句自己的情况做铺垫。',
-    '3. 只用口语，不要博主腔（不要「姐妹们/宝子们/家人们」），不要 AI 腔（不要「首先/其次/总之」、不要工整排比）。',
-    '4. 正文 2~4 句：铺垫 + 问题。结尾可以轻轻问一句「你们呢」，但不要「评论区告诉我/快收藏/码住」这类硬引导。',
-    '5. 标题 ≤20 字，就是问题本身或它的精简版。',
+    '1. 围绕上面的问题写，第一人称，像自己真的在纠结/好奇，可以带一句自己的情况做铺垫；不要宏大、不要说教、不要引战，且必须与发布时间相符。',
+    '2. 只用口语，不要博主腔（不要「姐妹们/宝子们/家人们」），不要 AI 腔（不要「首先/其次/总之」、不要工整排比）。',
+    '3. 正文 2~4 句：铺垫 + 问题。',
+    '4. 【例外条款】正文结尾必须原样带上这一句固定的话：「每周日我把大家的回答整理成一篇盘点，想被翻牌的先关注～」——这是本账号唯一允许的引导话术，其余引导（评论区告诉我/码住/收藏/留联系方式）仍然一律禁止。',
+    '5. 标题 ≤20 字，就是问题本身或它的精简版（固定那句翻牌话术不放标题里）。',
     '6. 配图用**纯文字卡片**（严禁 AI 生图、严禁照片），用本地脚本生成：',
     `   node ${TEXTCARD} --text "<问题>" [--sub "<一句小字>"] --out ${IMG_DIR}/ask-<短标识>.png`,
     '   生成 1~2 张（例如一张主问题、一张补充），确认图片生成成功（脚本会在 stdout 打印路径）。',
     `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
-    `8. 可先用 search_feeds 搜「${k.kw}」感受一下语感，严禁照抄。`,
+    `8. 发布成功后，立刻用 xiaohongshu-mcp 的 post_comment_to_feed 在这条笔记下发第一条评论，内容原样用：「${XHS_PIN_COMMENT}」`,
+    '9. 可先用 search_feeds 搜相关关键词感受一下语感，严禁照抄。',
+    '',
+    GROWTH,
     '',
     ANTI_AI,
     '',
@@ -109,32 +153,30 @@ function buildQuestionPrompt(k, { visibility, slotLabel }) {
   ].join('\n');
 }
 
-function buildAiSharePrompt({ visibility, slotLabel }) {
-  const recent = recentAiTopics();
+function buildHotPrompt(k, { visibility, slotLabel }) {
   const tr = timeRule(slotLabel);
   return [
-    `【自动发帖任务 · AI分享${slotLabel ? ' · ' + slotLabel : ''}】`,
+    `【自动发帖任务 · 热点解读${slotLabel ? ' · ' + slotLabel : ''}】本周小红书上「${k.kw}」相关内容热度最高。`,
     '',
-    '这是一个普通人的小红书账号。账号主人是程序员，日常在用各种 AI 工具，自己也搭了些自动化的小东西。',
-    '今天发一条「AI 使用分享」，目标：让人觉得"这人是真的在用，这个我马上能试"。',
+    '这是一个程序员的小红书账号：主人正在自建一套「AI 第二大脑」（本地知识库 + 自动化工作流）。今天发一条「AI 人物 / 大技术 · 自建派解读」——不做新闻转述，用自己正在做的事去接住这个热点。',
     ...(tr ? ['', tr] : []),
     '',
     '要求：',
-    '1. 只讲**一个很具体的小点**：某个 AI 工具的用法 / 一个踩过的坑 / 一个前后对比 / 自己搭的小东西。不要泛泛谈"AI 改变了生活"。',
-    '2. 第一人称口语，像随口跟同事说一句「我最近发现…」；不要博主腔（不要「姐妹们/宝子们」）、不要专家腔、不要 AI 腔（不要「首先/其次/总之」、不要工整排比）。',
-    '3. 不要引导性：不放链接、不喊「关注我/评论区/码住/收藏」、不推销任何产品或课程。',
-    '4. 正文 4~7 句，比提问帖多说一点、把这件事讲透，但别啰嗦（正文控制在 200 字以内）；标题 ≤20 字。',
-    '5. 用大家都能听懂的大白话：别堆专业术语；万一非提某个词（比如 agent、上下文、token），就在后面用一句人话解释，或者干脆换个通俗说法。宁可多写一句解释，也别让人看不懂。',
-    '6. 配图用**纯文字卡片**（严禁 AI 生图、严禁照片），用本地脚本生成：',
-    `   node ${TEXTCARD} --text "<一句话主题或结论>" --points "<要点1|要点2|要点3>" [--sub "<一句小字>"] --out ${IMG_DIR}/ai-<短标识>.png`,
-    '   生成 1~2 张（例如一张主题+要点的卡片，必要时再来一张）。',
-    `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
-    recent.length ? `8. 避免和最近发过的重复（最近发过：${recent.join('、')}），换一个角度。` : '8. 尽量选一个小而具体的角度。',
-    `9. 发布成功后，把本次选题的一个短关键词（2~6 字）作为一行，追加写入 ${AI_TOPICS_FILE}（文件不存在就创建）。`,
+    `1. 围绕「${k.kw}」，先用 search_feeds 搜一下这个词，找出最近最火的一个具体大事件 / 大技术 / 人物动作（选一条最有料的，并在回报里注明你选了什么）。`,
+    '2. 角度必须是「自建派」：这事对我自己搭的 AI 工作流 / 对想搭个人知识库的普通人，意味着什么。给出 2~3 条具体影响或可抄的做法。',
+    '3. 【诚实底线】没实测过的结论一律写成「我的判断 / 我的预期」，严禁编造实测数据、跑分、对比结果；可以写账号主人系统里真实存在的做法（自建知识库、本地部署、自动化发帖等），但不要透露敏感细节。',
+    '4. 第一人称口语，不捧不踩、不引战、不碰敏感话题；不要博主腔、不要 AI 腔。',
+    '5. 结尾必须落回自己的赛道一句话（例如「这事我会先在自己知识库的 XX 环节试，下周汇报」）。',
+    '6. 正文 4~7 句（200 字内），标题 ≤20 字。',
+    '7. 配图用**纯文字卡片**（严禁 AI 生图、严禁照片）：',
+    `   node ${TEXTCARD} --text "<一句话观点>" --points "<要点1|要点2|要点3>" [--sub "<一句小字>"] --out ${IMG_DIR}/hot-<短标识>.png`,
+    `8. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
+    '',
+    GROWTH,
     '',
     ANTI_AI,
     '',
-    '最后回报：标题、正文、标签、图片文件名、本次选题关键词、发布结果。',
+    '最后回报：标题、正文、标签、图片文件名、本次选的热点、发布结果。',
   ].join('\n');
 }
 
@@ -151,7 +193,7 @@ function buildFigurePrompt(figure, { visibility, slotLabel }) {
     '',
     '要求：',
     '1. 用大白话讲清这人是谁、他说的/做的那个点是什么；头衔最多一句带过，别堆名头。',
-    '2. 加一句自己的真实看法或感受，像跟朋友随口聊，不捧不踩。',
+    '2. 观点必须带「自建派」视角：他说的 / 做的，对我自己搭的 AI 工作流、对想搭个人知识库的普通人意味着什么；像跟朋友随口聊，不捧不踩。',
     '3. 第一人称、口语；不要博主腔（不要「姐妹们/宝子们」）、不要 AI 腔（不要「首先/其次/总之」、不要工整排比）。',
     '4. 不引战、不蹭政治、不碰中美对立等敏感话题，不做价值评判，只聊技术 / 方法 / 经历。',
     '5. 正文 3~6 句，标题 ≤20 字。',
@@ -169,9 +211,46 @@ function buildFigurePrompt(figure, { visibility, slotLabel }) {
     `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
     '8. 可先用 search_feeds 搜这个人名，感受下大家怎么聊的，严禁照抄。',
     '',
+    GROWTH,
+    '',
     ANTI_AI,
     '',
     '最后回报：标题、正文、标签、图片文件名、人物、发布结果。',
+  );
+  return lines.join('\n');
+}
+
+function buildWeeklyPrompt(ctx, { visibility, slotLabel }) {
+  const tr = timeRule(slotLabel);
+  const lines = [
+    `【自动发帖任务 · 周日汇总帖${slotLabel ? ' · ' + slotLabel : ''}】第 ${ctx.seq} 期`,
+    '',
+    '这是一个程序员的小红书账号，固定栏目「第二大脑周报」：把本周提问帖评论区的好回答整理成一篇盘点，兑现「想被翻牌的先关注」的承诺。',
+    `本周发过的提问帖（标题列表，共 ${ctx.questions.length} 条）：`,
+    ...ctx.questions.map((q) => `- ${q}`),
+  ];
+  if (tr) lines.push('', tr);
+  lines.push(
+    '',
+    '做法（严格按步骤）：',
+    '1. 用 xiaohongshu-mcp 的 get_my_profile（tab=note）拿到最近笔记列表，找到上面这些提问帖，记下 id 和 xsecToken。',
+    '2. 逐篇用 get_feed_detail（feed_id + xsec_token）读取评论，但**只读够用的量**：loadAllComments 设为 false，只取前 20 条，别点「更多回复」、别滚动加载全部；单篇 60 秒没返回就直接跳过，不要反复重试，继续下一篇。',
+    '2.1 【降级】如果评论确实拉不到（超时/为空），就不要硬凑：改为「本周提问回顾 + 每条问题的一个通用观察 + 下周预告」的轻量版，明确只写你自己看到的、不编造任何网友回答或昵称。',
+    '3. 挑出 3~5 条最有信息量 / 最真实 / 最有共鸣的回答（标准：具体、有细节、不灟水）。',
+    '4. 每条按「引用原回答（可用昵称）→ 你的一两句专业点评（这是干货本体，说明它好在哪、补充什么做法）」来写。',
+    '5. 【诚实底线】如果某篇评论很少或整体不足 3 条好的，就做「单条深挖」版（只选 1 条，写透），或者把本周热点解读的精华并进来；**严禁编造或改写评论原意**。',
+    '6. 结构固定：开头钩子（回顾本周问题+数据，如收到多少条回答）→ 精选回答逐条 → 「下周问题预告」→ 结尾原样带上：「每周日我把大家的回答整理成一篇盘点，想被翻牌的先关注～」',
+    `7. 下周问题预告用这一条：「${ctx.nextQuestion}」`,
+    '8. 正文 150~250 字，标题 ≤20 字（例：「本周最扎心的 5 条回答｜第二大脑周报 #'+ctx.seq+'」，数字按实际）。',
+    '9. 配图用**纯文字卡片**（严禁 AI 生图、严禁照片）：',
+    `   node ${TEXTCARD} --text "第二大脑周报 #${ctx.seq}" --points "<精选回答者昵称1|精选2|精选3>" [--sub "<一句话钩子>"] --out ${IMG_DIR}/weekly-<短标识>.png`,
+    `10. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
+    '',
+    GROWTH,
+    '',
+    ANTI_AI,
+    '',
+    '最后回报：标题、正文、标签、图片文件名、入选回答数量、发布结果。',
   );
   return lines.join('\n');
 }
@@ -201,6 +280,8 @@ function buildCustomPrompt({ topic, images = [] }, { visibility, timeLabel }) {
     '4. 正文 3~7 句，别太长；标题 ≤20 字。',
     '5. 用大家都能听懂的大白话：别堆专业术语；万一非提某个词，就顺带用一句人话解释。',
     `6. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
+    '',
+    GROWTH,
     '',
     ANTI_AI,
     '',
@@ -240,6 +321,8 @@ function buildDevlogPrompt(info, { visibility, slotLabel }) {
     `   node ${TEXTCARD} --text "<一句话主题>" --points "<要点1|要点2|要点3>" [--sub "<一句小字>"] --out ${IMG_DIR}/dev-<短标识>.png`,
     `7. 用 xiaohongshu-mcp 的 publish_content 发布，visibility 设为「${visibility}」；图片路径用容器内路径 /app/images/<文件名>。`,
     '',
+    GROWTH,
+    '',
     ANTI_AI,
     '',
     '最后回报：标题、正文、标签、图片文件名、发布结果。',
@@ -248,13 +331,14 @@ function buildDevlogPrompt(info, { visibility, slotLabel }) {
 }
 
 export function buildPostPrompt(ctx, { visibility = XHS_AUTOPOST_VISIBILITY, slotLabel = '', type = 'question' } = {}) {
-  if (type === 'ai') return buildAiSharePrompt({ visibility, slotLabel });
+  if (type === 'hot') return buildHotPrompt(ctx, { visibility, slotLabel });
   if (type === 'figure') return buildFigurePrompt(ctx, { visibility, slotLabel });
   if (type === 'devlog') return buildDevlogPrompt(ctx, { visibility, slotLabel });
+  if (type === 'weekly') return buildWeeklyPrompt(ctx, { visibility, slotLabel });
   return buildQuestionPrompt(ctx, { visibility, slotLabel });
 }
 
-async function post({ codex, log, visibility, slotLabel, reason, type = 'question' }) {
+async function post({ codex, log, visibility, slotLabel, reason, type = 'question', ctx = null }) {
   const state = loadState();
   let k = { kw: 'AI' };
   if (type === 'devlog') {
@@ -265,7 +349,7 @@ async function post({ codex, log, visibility, slotLabel, reason, type = 'questio
     const fig = pickFigure();
     if (!fig) return { ok: false, error: `未配置热点人物，请在 ${XHS_FIGURE_TOPICS_FILE} 添加（每行：名字 :: 观点 :: 图片URL）` };
     k = { kw: fig.name, figure: fig };
-  } else if (type !== 'ai') {
+  } else if (type === 'hot') {
     let snap = getLatestSnapshot();
     if (!snap || snap.date !== day()) {
       if (isScanning()) return { ok: false, error: '榜单抓取中，稍后重试' };
@@ -274,23 +358,30 @@ async function post({ codex, log, visibility, slotLabel, reason, type = 'questio
       snap = getLatestSnapshot();
       if (!snap || snap.date !== day()) return { ok: false, error: '榜单抓取失败' };
     }
-    const top = topKeyword(snap, XHS_AUTOPOST_METRIC, recentUsedKeywords(state));
+    const top = topKeyword(snap, XHS_AUTOPOST_METRIC);
     if (!top) return { ok: false, error: '榜单为空' };
     k = top;
+  } else if (type === 'weekly') {
+    k = { kw: `周报#${ctx?.seq ?? '?'}`, weekly: ctx || { questions: [], seq: 1, nextQuestion: '' } };
+  } else {
+    const qItem = pickQuestion();
+    if (!qItem) return { ok: false, error: `问题池为空，请在 ${QUESTIONS_FILE} 添加（每行一个问题）` };
+    k = { kw: qItem.q, question: qItem };
   }
   await codex.ensureReady();
   const r = await codex.request('thread/start', { cwd: XHS_WORK_CWD, sandbox: 'danger-full-access', approvalPolicy: 'never' });
   const threadId = r.thread.id;
-  const ctx = type === 'devlog' ? k.devlog : type === 'figure' ? k.figure : k;
-  const text = buildPostPrompt(ctx, { visibility, slotLabel, type });
+  const pctx = type === 'devlog' ? k.devlog : type === 'figure' ? k.figure : type === 'weekly' ? k.weekly : type === 'question' ? k.question : k;
+  const text = buildPostPrompt(pctx, { visibility, slotLabel, type });
   await codex.request('turn/start', { threadId, input: [{ type: 'text', text, text_elements: [] }] });
   log(`[autopost] 已发起：类型=${type}，主题=${k.kw}，可见=${visibility}，会话=${threadId}`);
-  return { ok: true, threadId, kw: k.kw, type, visibility };
+  return { ok: true, threadId, kw: k.kw, type, visibility, question: k.question?.q || '' };
 }
 
 /** 供 /api/xhs-radar/autopost 手动触发（默认仅自己可见以便试发） */
 export async function postNow({ codex, visibility = '仅自己可见', slotLabel = '手动试发', type = 'question' }) {
-  return post({ codex, log: console.log, visibility, slotLabel, reason: 'manual', type });
+  const ctx = type === 'weekly' ? weeklyCtx(loadState()) : null;
+  return post({ codex, log: console.log, visibility, slotLabel, reason: 'manual', type, ctx });
 }
 
 /** 自定义主题发帖（用户手填内容 + 可选上传图片） */
@@ -315,24 +406,45 @@ async function tick({ codex, log }) {
   const h = now.getHours();
   const m = now.getMinutes();
   const d = day();
-  const slots = XHS_AUTOPOST_SLOTS;
-  const dayTypes = typesForDay(d, slots.length);
+  const dow = ((now.getDay() + 6) % 7) + 1; // 1=周一 … 7=周日
   const state = loadState();
   const done = state[d] || [];
+  const weekMode = XHS_AUTOPOST_PLAN.some((p) => p.weekday);
+  let slots; let types;
+  if (weekMode) {
+    // 周历模式：只按 PLAN 里排到今天的条目发，没排到的时段留给人工干货帖
+    slots = XHS_AUTOPOST_PLAN.filter((p) => p.weekday === dow);
+    types = slots.map((p) => p.type);
+  } else {
+    slots = XHS_AUTOPOST_SLOTS;
+    const dayTypes = typesForDay(d, slots.length);
+    types = slots.map((p, i) => planTypeFor(p) || dayTypes[i] || 'question');
+  }
   const idx = slots.findIndex((p) => !done.includes(slotKey(p)) && p.hour === h && m >= (p.minute || 0));
   if (idx < 0) return;
   const slot = slots[idx];
   const key = slotKey(slot);
-  const type = planTypeFor(slot) || dayTypes[idx] || 'question';
+  const type = types[idx];
   ticking = true;
   try {
-    const res = await post({ codex, log, visibility: XHS_AUTOPOST_VISIBILITY, slotLabel: key, reason: 'schedule', type });
+    let extraCtx = null;
+    if (type === 'weekly') {
+      const hist = state.history || [];
+      const weekQs = hist.filter((hh) => hh.type === 'question' && hh.date >= dayBefore(6) && hh.date <= d).map((hh) => hh.kw).slice(-6);
+      const seq = hist.filter((hh) => hh.type === 'weekly').length + 1;
+      const nq = pickQuestion();
+      extraCtx = { questions: weekQs, seq, nextQuestion: nq ? nq.q : '（问题池待补充，见 questions.txt）' };
+    }
+    const res = await post({ codex, log, visibility: XHS_AUTOPOST_VISIBILITY, slotLabel: key, reason: 'schedule', type, ctx: extraCtx });
     if (res.ok) {
       state[d] = [...done, key];
       state.history = [...(state.history || []).slice(-200), { date: d, hour: slot.hour, minute: slot.minute, kw: res.kw, type: res.type }];
       state.last = { date: d, slot: key, kw: res.kw, type: res.type, threadId: res.threadId, visibility: res.visibility, at: Date.now() };
       if (res.type === 'figure') {
         try { writeFileSync(FIGURE_USED_FILE, [...readLines(FIGURE_USED_FILE), res.kw].join('\n') + '\n'); } catch {}
+      }
+      if (res.type === 'question' && res.question) {
+        try { writeFileSync(QUESTIONS_USED_FILE, [...readLines(QUESTIONS_USED_FILE), res.question].join('\n') + '\n'); } catch {}
       }
       saveState(state);
     }
@@ -346,7 +458,7 @@ export function startAutopost({ codex }) {
   const t = setInterval(() => tick({ codex, log: console.log }), 10 * 60 * 1000);
   t.unref?.();
   tick({ codex, log: console.log });
-  const label = (x) => (x === 'ai' ? 'AI分享' : x === 'figure' ? '人物观点' : x === 'devlog' ? '代码日常' : '提问帖');
+  const label = (x) => (x === 'hot' ? '热点解读' : x === 'figure' ? '人物观点' : x === 'devlog' ? '代码日常' : x === 'weekly' ? '汇总帖' : '提问帖');
   console.log(`[autopost] 时段：${XHS_AUTOPOST_SLOTS.map(slotKey).join(' / ')} · 类型轮换：${(XHS_AUTOPOST_ROTATION || []).map(label).join(' / ')}（${XHS_AUTOPOST_VISIBILITY}）· 提问帖避让最近 ${XHS_ROTATE_DAYS} 天同品类`);
 }
 

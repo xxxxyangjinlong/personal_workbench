@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>小红书热门</title>
+<style>
+  :root{--bg:#0e1116;--panel:#161b22;--panel2:#1b2230;--bd:#242c38;--fg:#e6edf3;--muted:#8b98a9;
+    --acc:#4c8dff;--acc2:#6ee7b7;--err:#ff6b6b;--safe-top:env(safe-area-inset-top);--safe-bottom:env(safe-area-inset-bottom)}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;height:100dvh;
+    display:flex;flex-direction:column;overflow:hidden}
+  button{font:inherit;cursor:pointer;border:none;border-radius:8px;background:var(--panel2);color:var(--fg)}
+  button:disabled{opacity:.5}
+  .topbar{display:flex;align-items:center;gap:10px;padding:calc(10px + var(--safe-top)) 14px 10px;border-bottom:1px solid var(--bd);
+    background:var(--panel);position:sticky;top:0;z-index:5}
+  .topbar .title{font-weight:600;font-size:15px}
+  .topbar .spacer{flex:1}
+  .dot{font-size:12px;color:var(--muted);border:1px solid var(--bd);border-radius:20px;padding:3px 10px}
+  .icon{background:transparent;color:var(--fg);font-size:17px;padding:6px 8px}
+  .back{color:var(--muted);text-decoration:none;font-size:13px;flex:none}
+  .hchips{display:flex;gap:8px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid var(--bd)}
+  .hchip{flex:none;display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid transparent;
+    border-radius:999px;padding:7px 12px;font-size:13px}
+  .hchip.on{background:#eef0ff22;color:#aab4ff;border-color:#4c8dff66}
+  .hchip.off{opacity:.5}
+  .hscroll{flex:1;min-height:0;overflow:auto;padding-bottom:calc(10px + var(--safe-bottom))}
+  .hcompose{margin:10px;background:var(--panel);border:1px solid var(--bd);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .hcompose-ta{width:100%;border:none;outline:none;resize:vertical;background:transparent;color:var(--fg);
+    font:inherit;font-size:14px;min-height:42px}
+  .hcompose-imgs{display:flex;flex-wrap:wrap;gap:6px}
+  .hcompose-img{position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--bd)}
+  .hcompose-img img{width:100%;height:100%;object-fit:cover;display:block}
+  .hcompose-del{position:absolute;top:0;right:0;width:18px;height:18px;line-height:16px;border:none;border-radius:0 0 0 8px;
+    background:rgba(0,0,0,.55);color:#fff;font-size:12px;cursor:pointer;padding:0}
+  .hcompose-row{display:flex;align-items:center;gap:8px}
+  .hcompose-file{flex:none;font-size:13px;color:#aab4ff;background:#eef0ff22;border-radius:9px;padding:8px 12px;cursor:pointer}
+  .hcompose-vis{flex:none;font-size:12px;color:var(--muted);background:transparent;border:1px solid var(--bd);border-radius:9px;padding:8px 10px}
+  .hcompose-send{flex:1;background:#3b3ed6;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:600}
+  .hauto{padding:9px 14px;font-size:12px;color:var(--muted);background:var(--panel);border-bottom:1px solid var(--bd)}
+  .hauto b{color:#aab4ff}
+  .hlist{list-style:none;margin:0;padding:6px 8px 14px}
+  .hitem{display:flex;align-items:center;gap:10px;padding:11px 10px}
+  .hitem + .hitem{border-top:1px solid var(--bd)}
+  .hrank{flex:none;width:22px;text-align:center;font-size:14px;font-weight:600;color:var(--muted)}
+  .hrank.top1{color:#ff6b6b}.hrank.top2{color:#f0883e}.hrank.top3{color:#d19a00}
+  .hbody{flex:1;min-width:0}
+  .htitle{display:block;font-size:15px;line-height:1.35}
+  .hmetric{margin-left:8px;font-size:13px;font-weight:700;color:#aab4ff}
+  .hmeta{display:flex;align-items:center;gap:8px;margin-top:3px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+  .htop{margin-top:3px;font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hfoot{flex:none;border-top:1px solid var(--bd);padding:8px 14px calc(8px + var(--safe-bottom));font-size:11.5px;color:var(--muted);
+    display:flex;flex-direction:column;gap:8px}
+  .hfoot-row{display:flex;gap:8px}
+  .hfoot-btn{flex:1;background:#eef0ff22;color:#aab4ff;border-radius:10px;padding:10px;font-size:13px}
+  .hfoot-btn:disabled{opacity:.5}
+  .err{color:var(--err);font-size:13px;padding:10px 14px}
+  .muted{color:var(--muted);padding:16px;font-size:13px}
+  .spin{width:14px;height:14px;border:2px solid #4c8dff55;border-top-color:var(--acc);border-radius:50%;
+    display:inline-block;animation:sp .7s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#123252;border:1px solid var(--acc);
+    color:#dceaff;padding:8px 16px;border-radius:9px;font-size:12.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;max-width:86vw}
+  .toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="back" href="/">← 工作台</a>
+  <span class="title">小红书热门</span>
+  <div style="flex:1"></div>
+  <span class="dot" id="snapWhen"></span>
+  <button class="icon" id="refreshBtn" title="重新抓取">⟳</button>
+</header>
+<div class="hchips" id="chips">
+  <button class="hchip on" data-m="medLikes">热度</button>
+  <button class="hchip" data-m="medCol">收藏率</button>
+  <button class="hchip" data-m="medSh">转发率</button>
+  <span class="hchip off" id="scanningChip" style="display:none">抓取中…</span>
+</div>
+<div class="hscroll">
+  <div class="hcompose">
+    <textarea class="hcompose-ta" rows="2" placeholder="想发点什么？写个主题或想法就行，配图可选～" id="compose"></textarea>
+    <div class="hcompose-imgs" id="imgs"></div>
+    <div class="hcompose-row">
+      <label class="hcompose-file">+ 图片<input type="file" accept="image/*" multiple hidden id="fileInput"></label>
+      <button type="button" class="hcompose-vis" id="visBtn">公开</button>
+      <button type="button" class="hcompose-send" id="sendBtn" disabled>发布</button>
+    </div>
+  </div>
+  <div class="err" id="err" style="display:none"></div>
+  <div class="hauto" id="auto" style="display:none"></div>
+  <div class="muted" id="empty" style="display:none">还没有数据。点右上角 ⟳ 抓一轮（约 5~8 分钟，22 个品类）。</div>
+  <ul class="hlist" id="list"></ul>
+</div>
+<div class="hfoot">
+  <span class="hfoot-line" id="footLine">榜单每日 8 点更新 · 试发均为「仅自己可见」</span>
+  <div class="hfoot-row">
+    <button class="hfoot-btn" data-type="question">试发提问帖</button>
+    <button class="hfoot-btn" data-type="devlog">试发代码日常</button>
+    <button class="hfoot-btn" data-type="figure">试发人物观点</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+let DATA = null, IND = null, METRIC = 'medLikes', IMGS = [], VIS = '公开可见', BUSY = '';
+
+const pct = (v) => Math.round((Number(v) || 0) * 100) + '%';
+function fmtNum(v) { const n = Number(v) || 0; if (n >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + '万'; return String(Math.round(n)); }
+const TYPE_LABEL = (t) => (t === 'ai' ? 'AI分享' : t === 'figure' ? '人物观点' : t === 'devlog' ? '代码日常' : t === 'hot' ? '热点解读' : t === 'weekly' ? '汇总帖' : '提问帖');
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1600); }
+
+async function api(path, body) {
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+async function load() {
+  try {
+    DATA = await api('api/xhs-radar');
+    $('#err').style.display = 'none';
+  } catch (e) { $('#err').textContent = e.message; $('#err').style.display = 'block'; return; }
+  try { IND = await api('indicator'); } catch { IND = null; }
+  render();
+}
+
+function render() {
+  const d = DATA || {};
+  const when = d.latest && d.latest.generatedAt ? new Date(d.latest.generatedAt) : null;
+  $('#snapWhen').textContent = when ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : '';
+  $('#scanningChip').style.display = d.scanning ? 'inline-flex' : 'none';
+  $('#refreshBtn').disabled = !!d.scanning;
+  const list = (d.latest?.keywords || []).filter((k) => !k.err && k.n > 0).sort((a, b) => (b[METRIC] || 0) - (a[METRIC] || 0));
+  const m = { medLikes: (k) => fmtNum(k.medLikes) + ' 赞', medCol: (k) => pct(k.medCol), medSh: (k) => pct(k.medSh) }[METRIC];
+  $('#list').innerHTML = list.map((k, i) => `
+    <li class="hitem">
+      <span class="hrank ${i < 3 ? 'top' + (i + 1) : ''}">${i + 1}</span>
+      <div class="hbody">
+        <div class="htitle">${esc(k.kw)}<span class="hmetric">${m(k)}</span></div>
+        <div class="hmeta"><span>中位 ${fmtNum(k.medLikes)} 赞</span><span>收 ${pct(k.medCol)}</span><span>转 ${pct(k.medSh)}</span><span>视频 ${pct(k.videoRatio)}</span></div>
+        ${k.topTitle ? `<div class="htop">热帖：${esc(k.topTitle)}（${fmtNum(k.topLikes)} 赞）</div>` : ''}
+      </div>
+    </li>`).join('');
+  $('#empty').style.display = (!d.latest && !d.scanning) ? 'block' : 'none';
+  $('#empty').textContent = d.lastError ? '上次抓取失败：' + d.lastError : '还没有数据。点右上角 ⟳ 抓一轮（约 5~8 分钟，22 个品类）。';
+  const ap = d.autopost || {};
+  const ind = IND || {};
+  const autoTop = (d.latest?.keywords || []).filter((k) => !k.err && k.n > 0).sort((a, b) => (b[ap.metric || 'medLikes'] || 0) - (a[ap.metric || 'medLikes'] || 0))[0];
+  $('#auto').style.display = 'block';
+  $('#auto').innerHTML = (ind.next
+      ? `下一条：<b>${ind.next.isToday ? '今天' : (ind.next.date || '').slice(5)} ${ind.next.slot}</b> · ${ind.next.typeLabel || ''}`
+      : '近 7 天无排期')
+    + ` · 今日 ${(ind.today || []).filter((p) => p.done).length}/${(ind.today || []).length}`
+    + (autoTop ? ` · 当前榜首 <b>${esc(autoTop.kw)}</b>` : '')
+    + ((ind.today || []).some((p) => p.missed) ? ' · <span style="color:var(--err)">今天有错过的时段</span>' : '');
+  $('#footLine').textContent = `榜单每日 ${d.hour ?? 8} 点更新 · 试发均为「仅自己可见」`;
+}
+function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+$$('#chips .hchip[data-m]').forEach((b) => b.onclick = () => {
+  METRIC = b.dataset.m;
+  $$('#chips .hchip[data-m]').forEach((x) => x.classList.toggle('on', x === b));
+  render();
+});
+$('#refreshBtn').onclick = async () => {
+  $('#refreshBtn').disabled = true;
+  try { await api('api/xhs-radar/run', {}); } catch (e) { toast('触发失败：' + e.message); }
+  load();
+};
+$('#visBtn').onclick = () => { VIS = VIS === '公开可见' ? '仅自己可见' : '公开可见'; $('#visBtn').textContent = VIS === '公开可见' ? '公开' : '仅自己'; };
+$('#fileInput').onchange = async (e) => {
+  const files = [...(e.target.files || [])].slice(0, 9 - IMGS.length);
+  e.target.value = '';
+  for (const f of files) {
+    try {
+      const bmp = await createImageBitmap(f);
+      const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const type = scale === 1 && f.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      IMGS.push({ name: f.name, dataUrl: c.toDataURL(type, 0.9) });
+    } catch {}
+  }
+  renderImgs();
+  updateSend();
+};
+function renderImgs() {
+  $('#imgs').innerHTML = IMGS.map((im, i) => `<span class="hcompose-img"><img src="${im.dataUrl}"><button type="button" class="hcompose-del" data-i="${i}">×</button></span>`).join('');
+  $$('#imgs .hcompose-del').forEach((b) => b.onclick = () => { IMGS.splice(+b.dataset.i, 1); renderImgs(); updateSend(); });
+}
+function updateSend() { $('#sendBtn').disabled = !!BUSY || (!$('#compose').value.trim() && !IMGS.length); }
+$('#compose').addEventListener('input', updateSend);
+$('#sendBtn').onclick = async () => {
+  const topic = $('#compose').value.trim();
+  if (!topic && !IMGS.length) return;
+  BUSY = 'custom'; updateSend();
+  try {
+    const r = await api('api/xhs-radar/custom', { topic, visibility: VIS, images: IMGS });
+    if (r.threadId) { $('#compose').value = ''; IMGS = []; renderImgs(); toast('已发起发布，可在工作台查看该会话进度'); }
+    else window.alert('发布失败：' + (r.error || '未知错误'));
+  } catch (e) { window.alert('发布失败：' + e.message); }
+  BUSY = ''; updateSend();
+};
+$$('.hfoot-btn').forEach((b) => b.onclick = async () => {
+  BUSY = b.dataset.type;
+  $$('.hfoot-btn').forEach((x) => (x.disabled = true));
+  try {
+    const r = await api('api/xhs-radar/autopost', { visibility: '仅自己可见', type: b.dataset.type });
+    toast(r.threadId ? '已发起试发，可在工作台查看该会话' : '试发失败：' + (r.error || '未知错误'));
+  } catch (e) { window.alert('试发失败：' + e.message); }
+  BUSY = ''; $$('.hfoot-btn').forEach((x) => (x.disabled = false));
+});
+load();
+</script>
+</body>
+</html>

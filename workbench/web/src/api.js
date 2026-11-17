@@ -14,7 +14,12 @@ async function req(path, opts = {}) {
     ...opts,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(opts.headers || {}) },
   });
-  if (res.status === 401) { const e = new Error('unauthorized'); e.code = 401; e.status = 401; throw e; }
+  if (res.status === 401) {
+    // 令牌失效：清除本地令牌并通知 App 回到登录页（避免静默失败变成“空数据怪页面”）
+    clearToken();
+    try { window.dispatchEvent(new CustomEvent('cm:unauthorized')); } catch {}
+    const e = new Error('unauthorized'); e.code = 401; e.status = 401; throw e;
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const e = new Error(data.message || data.error || res.statusText);
@@ -30,8 +35,14 @@ export const api = {
   models: () => req('/api/models'),
   threads: (q = '') => req('/api/threads' + q),
   projects: () => req('/api/projects'),
+  createProject: (body) => req('/api/projects', { method: 'POST', body: JSON.stringify(body) }),
+  updateProject: (id, body) => req(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteProject: (id) => req(`/api/projects/${id}`, { method: 'DELETE' }),
+  fsList: (p) => req('/api/fs' + (p ? `?path=${encodeURIComponent(p)}` : '')),
   services: () => req('/api/services'),
+  today: () => req('/api/today'),
   running: () => req('/api/running'),
+  modules: () => req('/api/modules'),
   xhsRadar: () => req('/api/xhs-radar'),
   xhsRadarRun: () => req('/api/xhs-radar/run', { method: 'POST', body: '{}' }),
   xhsRadarPost: (visibility, type) => req('/api/xhs-radar/autopost', { method: 'POST', body: JSON.stringify({ visibility, type }) }),
@@ -45,4 +56,5 @@ export const api = {
   deleteThread: (id) => req(`/api/threads/${id}`, { method: 'DELETE' }),
   archiveThread: (id) => req(`/api/threads/${id}/archive`, { method: 'POST', body: '{}' }),
   respond: (body) => req('/api/respond', { method: 'POST', body: JSON.stringify(body) }),
+  threadSettings: (id, mode) => req(`/api/threads/${id}/settings`, { method: 'POST', body: JSON.stringify({ mode }) }),
 };

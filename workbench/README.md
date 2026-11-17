@@ -9,6 +9,21 @@
 并用 SSE 把执行过程（`item/agentMessage/delta`、`turn/completed` 等通知）实时推给手机端。
 因此手机上看到的任务，和电脑上是**同一批**。
 
+- **新会话权限与电脑端一致**：`thread/start` 不传 sandbox/approvalPolicy 时由 app-server
+  按 `~/.codex/config.toml` 的默认值建会话；网关默认不传（`DEFAULT_SANDBOX`/`DEFAULT_APPROVAL`
+  留空即可强制指定）。
+- **项目管理**：`/api/projects` 支持新建/改名/换目录/删除分组（走 app-server
+  `project/create|update|delete`），与电脑端客户端的项目列表双向同步；删除项目只解除分组，不删会话。
+- **今日一屏**：首页与桌面概览顶部各一张「今日」卡片（数据来自 `/api/today`）：
+  今天活跃会话与运行数、token 当日累计（由 `thread/tokenUsage/updated` 通知按天落盘到
+  `data/today-usage.json`，自功能上线起累计）、小红书今日发布时段状态/下一次发布/题库余量
+  （余量 ≤3 标红提醒补货）、雷达榜 top3、磁盘/内存/负载。
+- **会话权限选择器（对标电脑端三档）**：会话页模型选择旁多了权限下拉——跟随客户端 /
+  询问批准 / 自动批准 / 完全访问，对后续回合生效（走 app-server `thread/settings/update`）；
+  电脑端改了权限，网页选择器会实时同步（监听 `thread/settings/updated`）。选「询问批准/
+  自动批准」后，审批请求会以黄色横条出现在输入框上方，点批准/拒绝即可放行
+  （回执形状是标准 JSON-RPC `{id, result:{decision}}`，不要带 method 标签）。
+
 ```
 手机浏览器 → Node 网关(登录) → SSE/WS → codex app-server(JSON-RPC) → 本机 Thread/终端/FS
 ```
@@ -42,36 +57,55 @@ npm run dev
 | `ACCESS_TOKEN` | codex-mobile | 登录令牌（**务必改**） |
 | `CODEX_BIN` | 自动探测 | codex 可执行文件路径 |
 | `DEFAULT_CWD` | `$HOME` | 新任务默认工作目录 |
-| `DEFAULT_SANDBOX` | workspace-write | read-only / workspace-write / danger-full-access |
-| `DEFAULT_APPROVAL` | never | untrusted / on-request / never |
+| `DEFAULT_SANDBOX` | 空 = 跟随 `~/.codex/config.toml`（与电脑端客户端同权限） | 显式设置可强制覆盖：read-only / workspace-write / danger-full-access |
+| `DEFAULT_APPROVAL` | 空 = 跟随 `~/.codex/config.toml` | 显式设置可强制覆盖：untrusted / on-request / never |
 | `DEFAULT_MODEL` | 空 | 默认模型 |
-| `XHS_WORK_CWD` | `~/workProjects/xhs-hotspot` | 自动发帖任务新建会话的工作目录 |
-| `XHS_KEYWORDS` | 22 个品类词 | 小红书热门雷达扫描的关键词，逗号分隔可覆盖 |
-| `XHS_RADAR_HOUR` | 8 | 每天几点后自动跑当天的热门榜 |
-| `XHS_AUTOPOST` | on | 关掉自动发帖设 `off` |
-| `XHS_AUTOPOST_HOURS` | 9,15 | 每天自动发帖的整点（逗号分隔） |
-| `XHS_AUTOPOST_METRIC` | medLikes | 取第 1 名依据：medLikes / medCol / medSh |
-| `XHS_AUTOPOST_VISIBILITY` | 公开可见 | 或「仅自己可见」 |
 
-## 小红书热门雷达
+## 模块宿主（firefly 式）
 
-每天 `XHS_RADAR_HOUR` 点后自动（也可手动）按关键词调 `xiaohongshu` MCP 的 `search_feeds`
-（`sort_by=最多点赞`、一周内），统计每个品类的**中位点赞 / 收藏率 / 转发率 / 视频占比**，
-按天存到 `data/xhs-radar/YYYY-MM-DD.json`。前端「小红书热门」页有三张榜（热度 / 收藏率 / 转发率）。
+小红书自动化等功能已拆为**独立模块包**（`modules/<ID>/` + 清单），支持两种清单格式：
 
-- `GET /api/xhs-radar` — 最新快照 + 状态（`scanning` / `lastError` / `hour`）
-- `POST /api/xhs-radar/run` — 手动触发一次扫描（后台异步，约 5~8 分钟）
+1. **module.json（原生）**：`transport: "http"`（REST 型，安装者独立运行，宿主只代理）或 `"stdio"`；
+2. **module.toml（Firefly 格式）**：`mcp.transport = "stdio"` 即插即用，字段与 42tr/firefly 的清单
+   一致（mcp.command/args、pages[].open_tool、jobs[]、indicator、allowed_tools、call_timeout_secs；
+   `streamable_http` 型 v1 暂不支持）。目录名不必等于清单 id，重复 id 的模块均不加载。
 
-## 自动发提问帖
+宿主提供：
 
-每天 `XHS_AUTOPOST_HOURS`（默认 9、15 点）各一条：取榜单第 1 名品类 → 新建 Codex 会话
-（`danger-full-access`，cwd=`XHS_WORK_CWD`）→ 写一个门槛低、易搭话的问题 → 用
-`workbench/tools/textcard.mjs` 生成**纯文字卡片图**（本地渲染，不用 AI 生图）→ 调 `xiaohongshu` MCP
-`publish_content` 发布（可见范围 `XHS_AUTOPOST_VISIBILITY`）。同一时段当天只发一次。
+- **扫描/启用**：启动时扫描 `modules/*/`；`POST /api/modules/rescan` 重新扫描；
+  `POST /api/modules/:id/toggle` 启用/停用（状态存 `data/modules.json`）。新模块默认停用。
+- **HTTP 型页面代理**：启用模块的页面经 `/m/<ID>/<子路径>` 原样转发到模块的 baseUrl（仅回环可达），
+  前端首页「功能」列表与桌面侧栏动态渲染启用模块的入口；模块挂了显示「模块离线」，宿主不受影响。
+- **stdio MCP 型**：宿主 spawn 子进程，MCP over stdin/stdout（initialize 握手 → tools/list →
+  tools/call/resources/read），单模块串行、超时（`call_timeout_secs`，默认 120s）、启动失败冷却 15s。
+  环境变量白名单注入（PATH/HOME/LANG + `env_from` + `env`），并注入
+  `FIREFLY_MODULE_DATA_DIR/CONFIG/TIMEZONE` 与同款 `WORKBENCH_MODULE_*`；模块数据目录
+  `data/modules/<ID>/`，stderr 落 `stderr.log`。工具经 `GET /m/<ID>/tools`、
+  `POST /m/<ID>/tools/<name>`、`POST /m/<ID>/rpc`（tools/call / resources/read / ping）暴露。
+  页面走 MCP Apps 语义：`GET /m/<ID>/page` 是桥包装页（iframe），宿主收页面 `initialized` 后调
+  `open_tool` 并推送 `tool-input`/`tool-result`，页面 `tools/call` 经桥转发；模块 HTML 由
+  `open_tool` 的 `_meta.ui.resourceUri` 经 `resources/read` 取回。宿主退出时杀全部子进程。
+- **对话接入（Codex MCP）**：网关提供聚合 MCP 端点 `POST /mcp`（streamable HTTP + Bearer），
+  把所有启用 stdio 模块的工具暴露给 Codex 对话：工具名 `mcp__<模块id>__<工具名>`（firefly 同款，
+  超长时截断+sha256 后缀），description 加 `[模块名]` 前缀，inputSchema 递归补 type。Codex 侧配置
+  （`codex mcp add workbench-modules --url http://127.0.0.1:8080/mcp --bearer-token-env-var WORKBENCH_TOKEN`），
+  app-server 的 launchd plist 里注入了 WORKBENCH_TOKEN；新装模块 rescan + 启用后自动出现在对话里。
+  Mac 终端直接跑 `codex exec` 时需自行 `export WORKBENCH_TOKEN=...`（app-server 场景不受影响）。
+- **定时任务**：清单 `jobs` 声明五段 cron + 时区，宿主调度器（20 秒 tick）调用模块的 job 端点
+  （http 型 POST path，stdio 型 tools/call）。语义与 firefly 一致：不重叠、离线期间不逐次补齐
+  （逾期合并为一次）、执行记录每模块留 100 条（`data/module-jobs.json`，`GET /api/modules/:id/jobs` 可查）。
+- **状态提示**：http 型轮询 `indicator.path`；stdio 型调 `indicator.tool`（无 indicator 则按
+  进程存活判定）。供今日一屏/首页显示模块状态。
 
-- `POST /api/xhs-radar/autopost` — 立即发一条（body `{visibility}`，默认「仅自己可见」，用于试发）
+`modules/` 里的 `echo-example`、`personal-calendar` 是 firefly 官方示例模块原样拷入
+（`module.toml` + `server.py` + 页面 HTML，零改动），可当模板用：echo 是最小工具模块模板，
+calendar 演示页面 + SQLite 存储 + 定时任务（daily-check 默认停用）。
 
-小红书 MCP 部署在 `~/workProjects/xiaohongshu-mcp`（Docker，`127.0.0.1:18060`）。
+小红书模块（`modules/xhs/`）自管：雷达每日扫描的失败重试、周历发帖的时段状态机、题库/人物池。
+数据目录：`data/modules/xhs/`（autopost-state.json、榜单快照）。配置在 `modules/xhs/xhs-config.mjs`
+（env 可覆盖）。由 launchd `com.yangjinlong.xhs-service` 独立运行（node --watch，改模块代码只重启它自己）；
+手动方式：`modules/xhs/start.sh` / `stop.sh`。模块 API：`GET /indicator`、`POST /jobs/radar-scan`、
+`GET/POST /api/xhs-radar*`（经宿主代理时路径为 `/m/xhs/...`）。
 
 ## 后续（frp 公网）
 
@@ -86,12 +120,18 @@ npm run dev
 - `POST /api/threads/:id/turns` {text, model?}
 - `POST /api/threads/:id/interrupt`
 - `GET  /api/models`
+- `GET/POST /api/projects`  `PATCH/DELETE /api/projects/:id`（项目列表/新建/改名换目录/删除分组）
+- `GET  /api/today`（今日一屏：会话活动/token 累计/小红书发布状态与题库余量/雷达 top3/机器状态）
+- `GET  /api/fs?path=`（浏览主目录下的文件夹，项目选择器用；默认 `~`，仅限 home 子树、不含隐藏目录）
 - `GET  /api/events`（SSE 实时通知）
 - `POST /api/respond`（回应审批等 server→client 请求）
+- `GET/POST /api/modules`  `POST /api/modules/rescan`  `POST /api/modules/:id/toggle`（模块宿主）
+- `GET /m/<模块ID>/<子路径>`（启用模块的页面/API 代理）
+- `GET /apk/app-debug.apk`（安卓 App 安装包，带令牌）
 
-## 终端嵌入
-
-网关会把 `/term/*` 反向代理到本机 `ttyd`（含 WebSocket），并用与登录相同的令牌鉴权
+- **安卓 App**：`workbench-app/`（Capacitor 壳，详见其 README）。构建后的 APK 可在手机浏览器
+  带令牌访问 `/apk/app-debug.apk` 直接下载安装；首页「📲 安装桌面 App」入口同效。
+- **终端嵌入**：网关会把 `/term/*` 反向代理到本机 `ttyd`（含 WebSocket），并用与登录相同的令牌鉴权
 （HTTP 用 `Authorization`/`?token=`/`cm_token` cookie，WebSocket 用 `?token=`/cookie）。
 
 - Node 启动时会自动拉起：`ttyd -i 127.0.0.1 -p 7681 -b /term -W tmux new -A -s main`

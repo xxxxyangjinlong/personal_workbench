@@ -83,6 +83,8 @@ export default function ThreadView({ id, models, onBack, onOpenThread }) {
   const [pending, setPending] = useState(null);   // { text, images, waited }  等待电脑端释放后自动重发（只发往原会话，不产生副本）
   const [images, setImages] = useState([]);        // [{ dataUrl, name }]
   const [refreshing, setRefreshing] = useState(false);
+  const [perm, setPerm] = useState('follow');       // follow=跟随客户端 / ask=询问批准 / auto=自动批准 / full=完全访问
+  const [approval, setApproval] = useState(null);   // 待审批的服务端请求 {id, method, params}
   const retryTimer = useRef(null);
   const listRef = useRef(null);
   const fileRef = useRef(null);
@@ -119,6 +121,20 @@ export default function ThreadView({ id, models, onBack, onOpenThread }) {
   const onNotif = useCallback((msg) => {
     const m = msg.method; const p = msg.params || {};
     if (m === '__connected') { refresh(); return; }   // SSE (重)连上：补拉断线期间错过的更新
+    if (msg.__serverRequest) {
+      // 审批请求（询问批准/自动批准模式下）：展示批准/拒绝按钮
+      const tid = p.threadId;
+      if (!tid || tid === id) setApproval({ id: msg.id, method: m, params: p });
+      return;
+    }
+    if (m === 'thread/settings/updated') {
+      // 权限被改动（本页或电脑端）时同步选择器显示
+      const st = p.threadSettings || {};
+      const sb = st.sandboxPolicy && st.sandboxPolicy.type;
+      const ap = st.approvalPolicy;
+      setPerm(sb === 'dangerFullAccess' ? 'full' : ap === 'untrusted' ? 'ask' : ap === 'on-request' ? 'auto' : 'follow');
+      return;
+    }
     if (p.threadId && p.threadId !== id) return;
     if (m === 'turn/started') { setRunning(true); setTurns((ts) => upsertTurn(ts, p.turn)); return; }
     if (m === 'turn/completed') { setRunning(false); setTurns((ts) => upsertTurn(ts, p.turn)); return; }
@@ -134,6 +150,32 @@ export default function ThreadView({ id, models, onBack, onOpenThread }) {
 
   async function trySend(body) {
     return api.sendTurn(id, body);
+  }
+
+  async function decideApproval(decision) {
+    if (!approval) return;
+    const req = approval;
+    setApproval(null);
+    try { await api.respond({ id: req.id, result: { decision } }); }
+    catch (e) { window.alert('审批回执失败：' + e.message); }
+  }
+  function approvalDesc(p) {
+    if (!p) return '';
+    if (Array.isArray(p.command)) return '$ ' + p.command.join(' ');
+    if (p.reason) return p.reason;
+    if (p.path || p.cwd) return [p.path, p.cwd].filter(Boolean).join(' · ');
+    return JSON.stringify(p).slice(0, 140);
+ }
+  async function changePerm(mode) {
+    const prev = perm;
+    setPerm(mode);
+    try {
+      const r = await api.threadSettings(id, mode);
+      if (!r.ok) throw new Error(r.error || '设置失败');
+    } catch (e) {
+      setPerm(prev);
+      window.alert('权限切换失败：' + e.message);
+    }
   }
 
   function readFile(file) {
@@ -259,6 +301,19 @@ export default function ThreadView({ id, models, onBack, onOpenThread }) {
         </div>
       )}
 
+      {approval && (
+        <div className="approvalbar">
+          <div className="ab-msg">
+            <b>需要批准</b> · {approval.method}
+            <div className="ab-detail">{approvalDesc(approval.params)}</div>
+          </div>
+          <div className="ab-btns">
+            <button onClick={() => decideApproval('acceptForSession')}>批准（本会话内）</button>
+            <button className="ghost" onClick={() => decideApproval('declined')}>拒绝</button>
+          </div>
+        </div>
+      )}
+
       <div className="composer">
         {images.length > 0 && (
           <div className="thumbs">
@@ -270,14 +325,24 @@ export default function ThreadView({ id, models, onBack, onOpenThread }) {
             ))}
           </div>
         )}
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-          <option value="">默认模型</option>
-          {models.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <div className="inputrow">
-          <button className="icon attach" title="添加图片" onClick={() => fileRef.current?.click()}>🖼️</button>
+        <div className="composerbar">
+          <select className={model ? '' : 'ph'} value={model} onChange={(e) => setModel(e.target.value)} title="本会话使用的模型">
+            <option value="">默认模型</option>
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select className="permsel" value={perm} onChange={(e) => changePerm(e.target.value)} title="本会话的权限模式，对后续回合生效">
+            <option value="follow">跟随客户端</option>
+            <option value="ask">询问批准</option>
+            <option value="auto">自动批准</option>
+            <option value="full">完全访问</option>
+          </select>
+          <button className="icon attach" title="添加图片" onClick={() => fileRef.current?.click()}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="M3.5 17.5l5-5 4 4 3.5-3.5 4.5 4.5" /></svg>
+          </button>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden
             onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+        </div>
+        <div className="inputrow">
           <textarea rows={1} placeholder="给 Codex 发消息…（可粘贴图片）" value={text}
             onChange={(e) => setText(e.target.value)}
             onPaste={onPaste}

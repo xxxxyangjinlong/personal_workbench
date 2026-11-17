@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { api } from '../api';
+import { api, getToken } from '../api';
+import TodayCard from './TodayCard';
 
 function relTime(sec) {
   if (!sec) return '';
@@ -12,8 +13,9 @@ function relTime(sec) {
   return `${dt.getMonth() + 1}月${dt.getDate()}日`;
 }
 
-export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenRadar, onLogout }) {
+export default function Home({ onOpenCodex, onOpenThread, onOpenService, onLogout }) {
   const [services, setServices] = useState([]);
+  const [modules, setModules] = useState([]);
   const [pinned, setPinned] = useState([]);
   const [threadsById, setThreadsById] = useState({});
   const [count, setCount] = useState(0);
@@ -26,6 +28,9 @@ export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenR
   useEffect(() => {
     api.services()
       .then((r) => { setServices(r.services || []); setPinned(r.pinned || []); setRunning(r.running || []); })
+      .catch(() => {});
+    api.modules()
+      .then((r) => setModules((r.modules || []).filter((m) => m.enabled)))
       .catch(() => {});
     api.threads('?limit=100')
       .then((r) => {
@@ -72,13 +77,27 @@ export default function Home({ onOpenCodex, onOpenThread, onOpenService, onOpenR
           </button>
         )}
 
+        <TodayCard onOpenThread={onOpenThread} onOpenCodex={onOpenCodex} onOpenRadar={(url) => { if (url) location.href = url; else onOpenCodex(); }} />
+
         <div className="listhead">功能</div>
         <ul className="functlist">
-          <li onClick={onOpenRadar}>
-            <span className="fico">🍠</span>
+          {modules.map((m) => (
+            m.pages.map((p) => (
+              <li key={m.id + p.id} onClick={() => { location.href = p.url; }}>
+                <span className="fico">{m.icon}</span>
+                <div className="ftext">
+                  <div className="fname">{p.title}{m.online === false && <span className="stdot off" style={{ marginLeft: 6 }} />}</div>
+                  <div className="fsub">{m.description || m.name}{m.online === false ? ' · 模块离线' : ''}</div>
+                </div>
+                <span className="chev">›</span>
+              </li>
+            ))
+          ))}
+          <li onClick={() => { location.href = '/apk/app-debug.apk?token=' + encodeURIComponent(getToken()); }}>
+            <span className="fico">📲</span>
             <div className="ftext">
-              <div className="fname">小红书热门</div>
-              <div className="fsub">每日抓各品类热门笔记，按热度/收藏率/转发率排榜</div>
+              <div className="fname">安装桌面 App</div>
+              <div className="fsub">安卓安装包（重装/更新用）</div>
             </div>
             <span className="chev">›</span>
           </li>

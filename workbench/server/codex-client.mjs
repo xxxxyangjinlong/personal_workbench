@@ -137,8 +137,12 @@ export class CodexClient extends EventEmitter {
     return this._request(method, params);
   }
 
-  respond(id, result) {
-    this._write({ jsonrpc: '2.0', id, result });
+  respond(id, result, method) {
+    // 服务端请求（如审批）的回执需带 method 标签：{id, method, response}
+    const msg = { jsonrpc: '2.0', id };
+    if (method) { msg.method = method; msg.response = result; }
+    else msg.result = result;
+    this._write(msg);
   }
 
   respondError(id, code, message) {

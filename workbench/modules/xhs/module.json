@@ -1,0 +1,16 @@
+{
+  "id": "xhs",
+  "name": "小红书自动化",
+  "version": "2.0.0",
+  "icon": "🍠",
+  "description": "热门雷达扫描 + 周历自动发帖（独立进程，宿主不拉起）",
+  "transport": "http",
+  "baseUrl": "http://127.0.0.1:8790",
+  "pages": [
+    { "id": "radar", "title": "小红书热门", "path": "/page" }
+  ],
+  "jobs": [
+    { "id": "radar-scan", "cron": "*/20 8-11 * * *", "tz": "Asia/Shanghai", "path": "/jobs/radar-scan" }
+  ],
+  "indicator": { "path": "/indicator", "refresh": 300 }
+}

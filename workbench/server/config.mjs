@@ -14,8 +14,10 @@ export const CODEX_BIN = CANDIDATE_BINS.find((p) => p && existsSync(p)) || 'code
 export const PORT = Number(process.env.PORT || 8080);
 export const ACCESS_TOKEN = process.env.ACCESS_TOKEN || 'codex-mobile';
 export const DEFAULT_CWD = process.env.DEFAULT_CWD || os.homedir();
-export const DEFAULT_SANDBOX = process.env.DEFAULT_SANDBOX || 'workspace-write';
-export const DEFAULT_APPROVAL = process.env.DEFAULT_APPROVAL || 'never';
+// 新会话默认权限：留空 = 跟随本机 ~/.codex/config.toml（与电脑端 Codex 客户端一致）；
+// 显式设置环境变量可强制覆盖（read-only / workspace-write / danger-full-access）。
+export const DEFAULT_SANDBOX = process.env.DEFAULT_SANDBOX || '';
+export const DEFAULT_APPROVAL = process.env.DEFAULT_APPROVAL || '';
 export const DEFAULT_MODEL = process.env.DEFAULT_MODEL || null;
 
 export const TERMINAL_ENABLED = (process.env.TERMINAL || 'on') !== 'off';
@@ -45,14 +47,19 @@ export const XHS_AUTOPOST_SLOTS = (process.env.XHS_AUTOPOST_SLOTS || '10:00,19:3
 export const XHS_AUTOPOST_HOURS = XHS_AUTOPOST_SLOTS.map((p) => p.hour);
 // 内容类型轮换池：question=提问帖，ai=AI 分享，figure=热点人物观点。
 // 每天把池里的类型「洗牌」后分配到各时段，避免老把同一类型固定在同一时间点。
-export const XHS_AUTOPOST_ROTATION = (process.env.XHS_AUTOPOST_ROTATION || 'question,devlog')
+export const XHS_AUTOPOST_ROTATION = (process.env.XHS_AUTOPOST_ROTATION || 'question,figure')
   .split(',').map((s) => s.trim()).filter(Boolean)
-  .map((t) => (['question', 'ai', 'figure', 'devlog'].includes(t) ? t : 'question'));
-// 可选：显式指定覆盖轮换，格式 HH[:MM]=type,...（例：10:00=question,19:30=ai）；留空则用上面的轮换
-export const XHS_AUTOPOST_PLAN = (process.env.XHS_AUTOPOST_PLAN || '')
+  .map((t) => (['question', 'hot', 'figure', 'devlog'].includes(t) ? t : 'question'));
+// 可选：显式指定覆盖轮换，格式 [星期-]HH[:MM]=type,...（例：1-10:00=question,2-19:30=hot,10:00=question）
+// 星期：1=周一 … 7=周日。带星期前缀的条目只在那天生效；只要有一条例目带星期，就进入「周历模式」：
+// 只按周历发帖，没排到的时段不发（留给人工干货帖）。type 可选：question / hot / figure / weekly / devlog
+export const XHS_AUTOPOST_PLAN = (process.env.XHS_AUTOPOST_PLAN
+  || '1-10:00=question,2-19:30=hot,3-10:00=question,4-19:30=hot,5-10:00=question,7-19:30=weekly')
   .split(',').map((s) => s.trim()).filter(Boolean)
-  .map((s) => { const [t, ty] = s.split('='); const [h, m] = (t || '').split(':'); return { hour: Number(h), minute: Number(m || 0), type: (ty || 'question').trim() }; })
-  .filter((p) => Number.isInteger(p.hour) && Number.isInteger(p.minute));
+  .map((s) => { const [t, ty] = s.split('='); let wd = null; let tt = t || '';
+    const wm = tt.match(/^([1-7])-/); if (wm) { wd = Number(wm[1]); tt = tt.slice(2); }
+    const [h, m] = tt.split(':'); return { weekday: wd, hour: Number(h), minute: Number(m || 0), type: (ty || 'question').trim() }; })
+  .filter((p) => Number.isInteger(p.hour) && ['question', 'hot', 'figure', 'weekly', 'devlog'].includes(p.type));
 export const XHS_AUTOPOST_METRIC = process.env.XHS_AUTOPOST_METRIC || 'medLikes'; // medLikes | medCol | medSh
 export const XHS_AUTOPOST_VISIBILITY = process.env.XHS_AUTOPOST_VISIBILITY || '公开可见'; // 或「仅自己可见」
 
@@ -71,6 +78,10 @@ export const PINNED_SESSIONS = [
 export const XHS_FIGURE_TOPICS_FILE = process.env.XHS_FIGURE_TOPICS_FILE || path.join(XHS_WORK_CWD, 'figure-topics.txt');
 // 提问帖「同品类隔天不重复」：避开最近 N 天（不含今天）已用过的品类
 export const XHS_ROTATE_DAYS = Number(process.env.XHS_ROTATE_DAYS || 2);
+// 提问帖问题池（每行一个问题，可用「问题 :: 一句小字」补充；# 为注释）；发过的会记入同目录 questions-used.txt，用完自动从头循环，记得定期补新的
+export const XHS_QUESTIONS_FILE = process.env.XHS_QUESTIONS_FILE || path.join(XHS_WORK_CWD, 'questions.txt');
+// 提问帖发布后的固定首评话术（周报翻牌机制的一部分）
+export const XHS_PIN_COMMENT = process.env.XHS_PIN_COMMENT || '每周日我把大家的回答整理成一篇盘点，想被翻牌的先关注～';
 
 // 小红书 MCP 的图片目录（宿主机）——对应容器内 /app/images
 export const XHS_IMG_DIR = process.env.XHS_IMG_DIR || path.join(os.homedir(), 'workProjects', 'xiaohongshu-mcp', 'images');

@@ -94,11 +94,21 @@ textarea { resize: none; max-height: 40vh; }
 .error.pad { padding: 8px 16px; }
 
 .composer { border-top: 1px solid var(--line); padding: 8px 12px calc(8px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
-.composer select { width: auto; align-self: flex-start; font-size: 13px; padding: 6px 10px; }
+.composerbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.composerbar select { width: auto; font-size: 12.5px; padding: 5px 9px; background: var(--card); border-radius: 8px; }
+.composerbar select.ph { color: var(--muted); }
+.composerbar .attach { font-size: 17px; padding: 5px 7px; line-height: 1; opacity: .7; }
+.permsel { color: var(--muted); }
+.approvalbar { margin: 0 18px 10px; padding: 11px 14px; border: 1px solid #f0d8a8; background: #fff7e6; border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+.approvalbar .ab-msg { font-size: 13px; color: #6b5312; }
+.approvalbar .ab-msg b { color: #8a6d1f; }
+.approvalbar .ab-detail { font: 12px/1.5 ui-monospace, Menlo, monospace; color: #55431a; word-break: break-all; margin-top: 3px; }
+.approvalbar .ab-btns { display: flex; gap: 8px; }
+.approvalbar .ab-btns button { font-size: 13px; padding: 8px 14px; }
+@media (min-width: 900px) { .thread .approvalbar { width: 100%; max-width: 840px; margin: 0 auto 10px; } }
 .inputrow { display: flex; gap: 8px; align-items: flex-end; }
 .inputrow textarea { flex: 1; }
 .inputrow button.stop { background: var(--err); }
-
 .btnlink { color: var(--accent); text-decoration: none; font-size: 14px; padding: 6px 8px; }
 .page.terminal .termframe { flex: 1; min-height: 0; width: 100%; border: 0; background: #000; }
 
@@ -385,7 +395,6 @@ textarea { resize: none; max-height: 40vh; }
   .thread .stream > .turn, .thread .stream > .empty { width: 100%; max-width: 840px; }
   .thread .composer { padding: 12px 28px 16px; align-items: center; }
   .thread .composer > * { width: 100%; max-width: 840px; }
-  .thread .composer > select { width: auto; max-width: none; align-self: flex-start; }
   .thread .error.pad { width: 100%; max-width: 840px; margin: 0 auto; }
 }
 
@@ -478,3 +487,46 @@ textarea { resize: none; max-height: 40vh; }
 .hcompose-vis { flex: none; font-size: 12px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; cursor: pointer; }
 .hcompose-send { flex: 1; background: var(--accent-ink, #3b3ed6); color: #fff; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .hcompose-send:disabled { opacity: .45; }
+
+/* ================= 项目新建/编辑（手机端 + 桌面端共用） ================= */
+.searchrow input { flex: 1; min-width: 0; }
+.projadd { flex: none; font-size: 13px; padding: 8px 12px; }
+.pgrouphead .pedit { background: var(--card); color: var(--muted); font-size: 13px; line-height: 1; padding: 5px 9px; border-radius: 10px; }
+.pgrouphead .pedit:active { background: #e9e9f2; color: var(--fg); }
+.pmodal { position: fixed; inset: 0; z-index: 60; background: rgba(17,18,30,.38); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.pmodal-card { background: var(--bg); border-radius: 16px; padding: 18px 16px 16px; width: 100%; max-width: 420px; max-height: 88vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-md, 0 4px 14px rgba(17,18,30,.14)); }
+.pmodal-title { font-weight: 700; font-size: 16px; }
+.pmodal-lbl { font-size: 12px; color: var(--muted); }
+.pmodal-tip { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.pmodal-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.pmodal-row .danger { color: var(--err); }
+.dlisthead-row { display: flex; align-items: center; gap: 8px; }
+.dprojadd { background: transparent; color: var(--accent-ink, #3b3ed6); font-size: 11.5px; padding: 3px 8px; border-radius: 8px; }
+.dprojadd:hover { background: var(--accent-soft, #eef0ff); }
+
+/* ================= 今日一屏 ================= */
+.tdy { margin: 12px 14px 0; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; background: var(--bg); }
+.tdy-head { display: flex; align-items: baseline; gap: 8px; font-weight: 700; font-size: 14px; }
+.tdy-date { font-size: 11px; color: var(--muted); font-weight: 400; }
+.tdy-row { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.tdy-row b { font-variant-numeric: tabular-nums; }
+.tdy-row .chev { margin-left: auto; color: var(--muted); flex: none; }
+.tdy-row.clickable { cursor: pointer; }
+.tdy-row.clickable:active { background: var(--card); }
+.tdy-grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tdy-sub { font-size: 11.5px; color: var(--muted); }
+.tdy-warn { color: #b45309; font-weight: 600; }
+.tdy-chips { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.tdy-chip { font-size: 11.5px; background: var(--card); border-radius: 999px; padding: 3px 10px; color: var(--fg); border: 1px solid var(--line); white-space: nowrap; }
+.tdy-chip b { color: var(--accent-ink, #3b3ed6); }
+@media (min-width: 900px) { .dhome .tdy { margin: 0 0 10px; } }
+
+/* 项目弹窗里的文件夹浏览器（默认主目录 ~/） */
+.fbrowse { border: 1px solid var(--line); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.fbrowse-head { display: flex; align-items: center; gap: 8px; }
+.fbrowse-head button { font-size: 12px; padding: 5px 10px; flex: none; }
+.fbrowse-path { flex: 1; min-width: 0; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.fbrowse-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 200px; overflow: auto; }
+.fbrowse-dir { background: var(--bg); color: var(--fg); font-size: 12.5px; padding: 8px 8px; border-radius: 8px; border: 1px solid var(--line); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fbrowse-dir:active { background: var(--accent-soft, #eef0ff); color: var(--accent-ink, #3b3ed6); }
+.fbrowse-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 4px 0; }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { subscribe } from '../events';
+import ProjectDialog from './ProjectDialog';
 
 function relTime(sec) {
   if (!sec) return '';
@@ -35,6 +36,7 @@ export default function Sessions({ onOpen, onBack }) {
 
   const [running, setRunning] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [projEdit, setProjEdit] = useState(null); // null | {} 新建 | { project } 编辑
 
   const reload = useCallback(() => Promise.all([api.projects(), api.threads('?limit=100')])
     .then(([p, t]) => { setProjects(p.data || []); setThreads(t.data || []); })
@@ -54,8 +56,8 @@ export default function Sessions({ onOpen, onBack }) {
     return () => clearInterval(timer);
   }, [reload]);
 
-  // SSE (重)连上 / 页面重新可见时刷新列表，避免网关重启后列表过期。
-  useEffect(() => subscribe((m) => { if (m.method === '__connected') reload(); }), [reload]);
+  // SSE (重)连上 / 项目变化（含电脑端增删改） / 页面重新可见时刷新，避免列表过期。
+  useEffect(() => subscribe((m) => { if (m.method === '__connected' || m.method === 'project/changed') reload(); }), [reload]);
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === 'visible') reload(); };
     document.addEventListener('visibilitychange', onVis);
@@ -87,6 +89,7 @@ export default function Sessions({ onOpen, onBack }) {
     ? threads.filter((t) => ((t.name || '') + (t.preview || '') + (t.cwd || '')).toLowerCase().includes(q.toLowerCase()))
     : threads;
   const groups = groupByProject(projects, filtered, !q);
+  const cwdOptions = [...new Set(threads.map((t) => t.cwd).filter(Boolean))];
 
   return (
     <div className="page">
@@ -100,6 +103,7 @@ export default function Sessions({ onOpen, onBack }) {
 
       <div className="searchrow">
         <input placeholder="搜索会话…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="ghost projadd" onClick={() => setProjEdit({})}>＋ 项目</button>
       </div>
 
       <div className="sessionscroll">
@@ -112,6 +116,9 @@ export default function Sessions({ onOpen, onBack }) {
               <span className="pname">{g.name}</span>
               <span className="pcount">{g.threads.length}</span>
               <span className="spacer" />
+              {g.id !== '__none' && (
+                <button className="pedit" title="编辑项目" onClick={(e) => { e.stopPropagation(); setProjEdit({ project: projects.find((p) => p.id === g.id) }); }}>✎</button>
+              )}
               <button className="padd" title="在该项目新建会话" onClick={(e) => { e.stopPropagation(); newThread(g); }}>＋</button>
             </div>
             {g.roots[0] && <div className="proot">{g.roots[0]}</div>}
@@ -141,6 +148,14 @@ export default function Sessions({ onOpen, onBack }) {
           </section>
         ))}
       </div>
+      {projEdit && (
+        <ProjectDialog
+          project={projEdit.project || null}
+          cwds={cwdOptions}
+          onClose={() => setProjEdit(null)}
+          onSaved={reload}
+        />
+      )}
     </div>
   );
 }

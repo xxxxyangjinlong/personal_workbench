@@ -4,16 +4,16 @@ import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { existsSync, mkdirSync, writeFileSync, createReadStream } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, createReadStream, statSync, readdirSync, realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { CodexClient } from './codex-client.mjs';
 import { startTtyd } from './terminal.mjs';
 import { makeProxyServer } from './proxy.mjs';
-import { runScan as xhsRunScan, getLatestSnapshot, radarMeta, startScheduler as startXhsRadar } from './xhs-radar.mjs';
-import { autopostMeta, postNow as xhsPostNow, postCustom as xhsPostCustom, startAutopost } from './xhs-autopost.mjs';
+import { todayData, noteTokenUsage } from './today.mjs';
+import { scanModules, listModules, setEnabled, proxyModule, stdioRoute, tickJobs, refreshIndicators, getModule, killAllStdio, jobRecords, mcpEndpoint } from './modules.mjs';
 import {
   CODEX_BIN, PORT, ACCESS_TOKEN, DEFAULT_CWD, DEFAULT_SANDBOX, DEFAULT_APPROVAL, DEFAULT_MODEL,
-  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS, XHS_WORK_CWD, XHS_IMG_DIR,
+  TERMINAL_ENABLED, TTYD_PORT, TTYD_BASE, TMUX_SESSION, EXTRA_SERVICES, PINNED_SESSIONS,
 } from './config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,7 +64,7 @@ function noteThreadActivity(m) {
     runningThreads.delete(tid); // 安全网：明确的空闲才清除
   }
 }
-codex.on('notification', (m) => { noteThreadActivity(m); broadcast('notification', m); });
+codex.on('notification', (m) => { noteThreadActivity(m); if (m.method === 'thread/tokenUsage/updated') noteTokenUsage(m); broadcast('notification', m); });
 codex.on('serverRequest', (m) => broadcast('serverRequest', m));
 codex.on('status', (s) => { console.log('[codex]', s.state); broadcast('status', s); });
 codex.on('raw', (l) => broadcast('raw', { line: l }));
@@ -103,6 +103,80 @@ app.get('/api/projects', auth, async (_req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// 路径规整：支持 ~ 与相对路径，返回绝对路径字符串
+function normalizeProjectPath(p) {
+  let s = String(p || '').trim();
+  if (!s) return '';
+  if (s.startsWith('~')) s = path.join(os.homedir(), s.slice(1));
+  return path.resolve(s);
+}
+
+function isDirectory(abs) {
+  try { return statSync(abs).isDirectory(); } catch { return false; }
+}
+
+// 新建项目（对应电脑端客户端的项目列表，走 app-server project/create）
+app.post('/api/projects', auth, async (req, res) => {
+  try {
+    await codex.ensureReady();
+    const { name, path: rawPath } = req.body || {};
+    const dir = normalizeProjectPath(rawPath);
+    if (!dir) return res.status(400).json({ error: 'bad_request', message: '请填写项目根目录' });
+    if (!isDirectory(dir)) return res.status(400).json({ error: 'bad_request', message: `目录不存在或不是文件夹：${dir}` });
+    const nm = String(name || '').trim() || dir.split(path.sep).filter(Boolean).pop() || '';
+    if (!nm) return res.status(400).json({ error: 'bad_request', message: '项目名称不能为空' });
+    const r = await codex.request('project/create', { name: nm, roots: [{ path: dir }], idempotencyKey: randomUUID() });
+    res.json(r);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 编辑项目：改名（name）和/或更换根目录（path）
+app.patch('/api/projects/:id', auth, async (req, res) => {
+  try {
+    await codex.ensureReady();
+    const { name, path: rawPath } = req.body || {};
+    const params = { projectId: req.params.id };
+    if (name !== undefined) {
+      const nm = String(name).trim();
+      if (!nm) return res.status(400).json({ error: 'bad_request', message: '项目名称不能为空' });
+      params.name = nm;
+    }
+    if (rawPath !== undefined) {
+      const dir = normalizeProjectPath(rawPath);
+      if (!dir) return res.status(400).json({ error: 'bad_request', message: '请填写项目根目录' });
+      if (!isDirectory(dir)) return res.status(400).json({ error: 'bad_request', message: `目录不存在或不是文件夹：${dir}` });
+      params.roots = [{ path: dir }];
+    }
+    res.json(await codex.request('project/update', params));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 删除项目：只解除分组，项目下的会话不会被删除
+app.delete('/api/projects/:id', auth, async (req, res) => {
+  try {
+    await codex.ensureReady();
+    res.json(await codex.request('project/delete', { projectId: req.params.id }));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 浏览主目录下的文件夹（项目选择器用）：默认主目录，只能浏览 home 子树，不显示隐藏目录
+app.get('/api/fs', auth, (req, res) => {
+  const home = os.homedir();
+  let p = normalizeProjectPath(req.query.path) || home;
+  try { p = realpathSync(p); } catch { return res.status(400).json({ error: 'bad_request', message: `目录不存在：${p}` }); }
+  if (p !== home && !p.startsWith(home + path.sep)) {
+    return res.status(403).json({ error: 'forbidden', message: '只能浏览用户主目录下的文件夹' });
+  }
+  let dirs = [];
+  try {
+    dirs = readdirSync(p, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => ({ name: e.name, path: path.join(p, e.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+  } catch (err) { return res.status(500).json({ error: err.message }); }
+  res.json({ path: p, name: path.basename(p), home, parent: p === home ? null : path.dirname(p), dirs });
+});
+
 // ---------- external services config ----------
 function probe(host, port, timeout = 600) {
   return new Promise((resolve) => {
@@ -128,44 +202,38 @@ app.get('/api/running', auth, (_req, res) => {
   res.json({ running: [...runningThreads.keys()] });
 });
 
-// ---------- 小红书热门雷达 ----------
-app.get('/api/xhs-radar', auth, (_req, res) => {
-  res.json({ latest: getLatestSnapshot(), cwd: XHS_WORK_CWD, autopost: autopostMeta(), ...radarMeta() });
-});
-app.post('/api/xhs-radar/run', auth, (_req, res) => {
-  xhsRunScan({ reason: 'manual' }).catch(() => {});
-  res.json({ ok: true, scanning: true });
-});
-app.post('/api/xhs-radar/autopost', auth, async (req, res) => {
-  try {
-    const visibility = (req.body && req.body.visibility) || '仅自己可见';
-    const type = (req.body && req.body.type) || 'question';
-    const r = await xhsPostNow({ codex, visibility, type });
-    res.json({ ok: true, ...r });
-  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+// ---------- 今日一屏 ----------
+app.get('/api/today', auth, async (_req, res) => {
+  try { res.json(await todayData({ codex, running: [...runningThreads.keys()] })); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 自定义发帖：用户手填主题 + 可选上传图片（base64 dataURL）
-app.post('/api/xhs-radar/custom', auth, async (req, res) => {
-  try {
-    const b = req.body || {};
-    const topic = String(b.topic || '');
-    const visibility = b.visibility || '公开可见';
-    const images = Array.isArray(b.images) ? b.images : [];
-    if (!topic.trim() && !images.length) return res.status(400).json({ ok: false, error: '请填写内容或上传图片' });
-    mkdirSync(XHS_IMG_DIR, { recursive: true });
-    const stamp = Date.now();
-    const saved = [];
-    images.slice(0, 9).forEach((img, i) => {
-      const m = String((img && img.dataUrl) || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
-      if (!m) return;
-      const ext = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }[m[1]]) || 'png';
-      const name = `custom-${stamp}-${i}.${ext}`;
-      try { writeFileSync(path.join(XHS_IMG_DIR, name), Buffer.from(m[2], 'base64')); saved.push(name); } catch {}
-    });
-    const r = await xhsPostCustom({ codex, visibility, topic, images: saved });
-    res.json({ ok: true, ...r, images: saved });
-  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+// ---------- 模块宿主（firefly 式：modules/<id>/module.json，HTTP 型模块由安装者独立运行） ----------
+app.get('/api/modules', auth, async (_req, res) => {
+  await refreshIndicators().catch(() => {});
+  res.json({ modules: listModules() });
+});
+app.post('/api/modules/rescan', auth, (_req, res) => {
+  scanModules();
+  refreshIndicators().catch(() => {});
+  res.json({ ok: true, modules: listModules() });
+});
+app.post('/api/modules/:id/toggle', auth, (req, res) => {
+  const ok = setEnabled(req.params.id, !!(req.body && req.body.enabled));
+  refreshIndicators().catch(() => {});
+  res.json({ ok, modules: listModules() });
+});
+app.get('/api/modules/:id/jobs', auth, (req, res) => {
+  res.json({ jobs: jobRecords(req.params.id) });
+});
+// 聚合 MCP 端点（streamable HTTP，Bearer 鉴权）：Codex 对话由此调用启用模块的工具
+app.post('/mcp', auth, (req, res) => { mcpEndpoint(req, res).catch((e) => { if (!res.headersSent) res.status(500).json({ jsonrpc: '2.0', id: null, error: { code: -32603, message: String(e.message || e) } }); }); });
+// 模块页面/API 统一代理：/m/<id>/<子路径> → http 模块代理或 stdio 模块路由（仅启用模块）
+app.use('/m/:id', auth, (req, res) => {
+  const mod = getModule(req.params.id);
+  if (!mod || !mod.enabled) return res.status(403).json({ error: '模块未启用' });
+  if (mod.transport === 'stdio') stdioRoute(mod, req, res, req.url).catch((e) => { console.error('[modules] stdioRoute 异常:', e); if (!res.headersSent) res.status(500).json({ error: e.message }); });
+  else proxyModule(mod, req, res, req.url);
 });
 
 app.get('/api/loaded', auth, async (_req, res) => {
@@ -189,9 +257,12 @@ app.post('/api/threads', auth, async (req, res) => {
   try {
     await codex.ensureReady();
     const { cwd, model, sandbox, approvalPolicy } = req.body || {};
+    // sandbox/approvalPolicy 仅在显式给出（body 或环境变量）时才传；
+    // 省略时 app-server 按 ~/.codex/config.toml 的默认值建会话，与电脑端客户端同权限。
     res.json(await codex.request('thread/start', {
       cwd: cwd || DEFAULT_CWD, model: model || DEFAULT_MODEL || undefined,
-      sandbox: sandbox || DEFAULT_SANDBOX, approvalPolicy: approvalPolicy || DEFAULT_APPROVAL,
+      sandbox: sandbox || DEFAULT_SANDBOX || undefined,
+      approvalPolicy: approvalPolicy || DEFAULT_APPROVAL || undefined,
     }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -326,11 +397,57 @@ app.post('/api/threads/:id/interrupt', auth, async (req, res) => {
 });
 
 app.post('/api/respond', auth, (req, res) => {
-  const { id, result, error } = req.body || {};
+  const { id, result, error, method } = req.body || {};
   if (id === undefined) return res.status(400).json({ error: 'id required' });
   if (error) codex.respondError(id, error.code ?? -32000, error.message ?? 'error');
-  else codex.respond(id, result ?? {});
+  else codex.respond(id, result ?? {}, method);
   res.json({ ok: true });
+});
+
+// ---------- 会话权限（对标电脑端客户端的三档选择器） ----------
+const PERM_SANDBOX_POLICIES = {
+  'workspace-write': { type: 'workspaceWrite', writableRoots: [], networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false },
+  'danger-full-access': { type: 'dangerFullAccess' },
+  'read-only': { type: 'readOnly' },
+};
+const PERM_PRESETS = {
+  ask:  { approvalPolicy: 'untrusted', sandboxPolicy: PERM_SANDBOX_POLICIES['workspace-write'] },
+  auto: { approvalPolicy: 'on-request', sandboxPolicy: PERM_SANDBOX_POLICIES['workspace-write'] },
+  full: { approvalPolicy: 'never', sandboxPolicy: PERM_SANDBOX_POLICIES['danger-full-access'] },
+};
+// 「跟随客户端」的值 = ~/.codex/config.toml 里用户自己定的默认权限
+function codexConfigPerm() {
+  try {
+    const t = readFileSync(path.join(os.homedir(), '.codex', 'config.toml'), 'utf8');
+    const grab = (k) => { const m = t.match(new RegExp('^' + k + '\\s*=\\s*"([^"]+)"', 'm')); return m ? m[1] : null; };
+    return { sandbox: grab('sandbox_mode') || 'workspace-write', approval: grab('approval_policy') || 'never' };
+  } catch { return { sandbox: 'workspace-write', approval: 'never' }; }
+}
+
+app.post('/api/threads/:id/settings', auth, async (req, res) => {
+  try {
+    await codex.ensureReady();
+    const mode = (req.body && req.body.mode) || 'follow';
+    let params;
+    if (mode === 'follow') {
+      const cfg = codexConfigPerm();
+      params = { approvalPolicy: cfg.approval, sandboxPolicy: PERM_SANDBOX_POLICIES[cfg.sandbox] || PERM_SANDBOX_POLICIES['workspace-write'] };
+    } else {
+      const p = PERM_PRESETS[mode];
+      if (!p) return res.status(400).json({ error: '未知权限模式' });
+      params = p;
+    }
+    const payload = { threadId: req.params.id, ...params };
+    try {
+      await codex.request('thread/settings/update', payload);
+    } catch (e) {
+      if (/not found|not loaded|unsubscribed|no such thread/i.test(e.message || '')) {
+        await codex.request('thread/resume', { threadId: req.params.id });
+        await codex.request('thread/settings/update', payload);
+      } else { throw e; }
+    }
+    res.json({ ok: true, mode, applied: params });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ---------- terminal reverse proxy (http + websocket) ----------
@@ -393,6 +510,14 @@ app.get('/api/localimage', auth, (req, res) => {
 });
 
 const webDist = path.join(__dirname, '..', 'web', 'dist');
+// 安卓 App 安装包（Capacitor 构建产物，手机浏览器带令牌直接下载安装）
+const APK_PATH = path.join(__dirname, '..', '..', 'workbench-app', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+app.get('/apk/app-debug.apk', auth, (req, res) => {
+  if (!existsSync(APK_PATH)) return res.status(404).json({ error: 'APK 未构建，先跑 gradlew assembleDebug' });
+  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+  res.setHeader('Content-Disposition', 'attachment; filename="workbench.apk"');
+  createReadStream(APK_PATH).pipe(res);
+});
 if (existsSync(webDist)) {
   // HTML 永不缓存（避免发版后旧 index.html 指向已删除的旧 bundle 导致白屏）；
   // 带内容哈希的 /assets 可长期强缓存。
@@ -434,8 +559,11 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`access token: ${ACCESS_TOKEN}`);
 });
 
-startXhsRadar();
-startAutopost({ codex });
+// —— 模块宿主启动：扫描 + jobs 调度器（不重叠/不补齐/逾期合并一次）+ indicator 轮询 ——
+scanModules();
+setInterval(() => { tickJobs().catch(() => {}); }, 20 * 1000).unref?.();
+setInterval(() => { refreshIndicators().catch(() => {}); }, 5 * 60 * 1000).unref?.();
+refreshIndicators().catch(() => {});
 
 // ---------- graceful shutdown（避免热重启/退出时残留 app-server 子进程）----------
 let _shuttingDown = false;
@@ -443,10 +571,11 @@ function shutdown(sig) {
   if (_shuttingDown) return;
   _shuttingDown = true;
   console.log(`[server] ${sig} received, shutting down…`);
+  try { killAllStdio(); } catch {}
   try { codex.stop(); } catch {}
   try { server.close(() => process.exit(0)); } catch { process.exit(0); }
   setTimeout(() => process.exit(0), 2000).unref?.();
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('exit', () => { try { codex.stop(); } catch {} });
+process.on('exit', () => { try { killAllStdio(); } catch {} try { codex.stop(); } catch {} });
