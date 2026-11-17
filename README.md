@@ -95,7 +95,8 @@ cd services/deploy-tools && ./start.sh 8778    # 8778
 | --- | --- |
 | `com.yangjinlong.codex-appserver` | 长活 Codex app-server（8123，KeepAlive） |
 | `com.yangjinlong.codex-mobile` | 网关（8080，`node --watch`） |
-| `com.yangjinlong.llm-proxy` | LLM 清洗代理（8199，KeepAlive；上游 `LLM_UPSTREAM` 在 plist 里改） |
+| `com.yangjinlong.llm-proxy` | LLM 清洗代理（8199 → 公司网关，KeepAlive；上游 `LLM_UPSTREAM`、DNS 兜底 `LLM_DNS_SERVERS` 在 plist 里改） |
+| `com.yangjinlong.llm-proxy-glm` | LLM 清洗代理·智谱（8200 → open.bigmodel.cn/api；注意上游要含 `/api`，否则 405） |
 
 改动后重载（网关可直接用 `./scripts/restart.sh`）：
 
