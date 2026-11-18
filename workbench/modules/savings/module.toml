@@ -1,0 +1,23 @@
+manifest_version = 1
+id = "savings"
+name = "存钱进度"
+version = "0.2.0"
+host_api = "1"
+description = "按日期记录最新存款总数，自动计算较上次变化并展示进度列表。"
+
+[mcp]
+transport = "stdio"
+command = "python3"
+args = ["server.py"]
+
+[[pages]]
+id = "progress"
+title = "存钱进度"
+open_tool = "list_savings"
+
+[[jobs]]
+id = "monthly-reminder"
+tool = "check_monthly_reminder"
+cron = "0 10 1 * *"
+timezone = "Asia/Shanghai"
+enabled_by_default = false

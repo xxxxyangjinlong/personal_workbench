@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>存钱进度</title>
+<style>
+:root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--accent:#0f766e;--accent2:#14b8a6;--danger:#dc2626;--card:#fff;--bg:#f6f8fb}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px 48px;font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--ink);background:radial-gradient(900px 420px at 15% -10%,#dff5ef 0%,transparent 60%),radial-gradient(700px 380px at 100% 0%,#e6ecff 0%,transparent 55%),var(--bg);min-height:100vh}
+.wrap{max-width:1060px;margin:0 auto}
+header h1{font-size:26px;margin:0 0 6px;letter-spacing:-.02em}
+header p{margin:0;color:var(--muted)}
+#status{min-height:22px;margin:14px 0 0;font-size:13px;color:var(--muted)}
+#status.error{color:var(--danger)}
+#status.ok{color:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+.stat span{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.stat strong{font-size:26px;font-weight:700;letter-spacing:-.02em;display:block}
+.stat strong small{font-size:13px;font-weight:500;color:var(--muted);margin-left:6px;letter-spacing:0}
+.stat .sub{font-size:12px;color:var(--muted);margin-top:4px}
+.up{color:#047857}.down{color:var(--danger)}
+.bar{height:8px;border-radius:99px;background:#e8edf3;overflow:hidden;margin-top:12px}
+.bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .35s ease}
+.layout{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+.panel h2{font-size:16px;margin:0 0 14px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:13px;color:var(--muted)}
+input,textarea{font:inherit;color:var(--ink);padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;width:100%;resize:vertical}
+textarea{min-height:64px}
+input:focus,textarea:focus{outline:none;border-color:var(--accent2);box-shadow:0 0 0 3px rgba(20,184,166,.15)}
+.actions-row{display:flex;gap:8px;margin-top:4px}
+button{font:inherit;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:var(--ink);padding:9px 14px;border-radius:10px;transition:.15s}
+button:hover{border-color:#94a3b8}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;flex:1;font-weight:600}
+button.primary:hover{background:#0b5f59}
+button.ghost{color:var(--muted)}
+button.small{padding:5px 10px;font-size:13px;border-radius:8px}
+button.link{border:none;background:none;padding:0;color:var(--muted);font-size:12px;text-decoration:underline}
+button:disabled{opacity:.5;cursor:default}
+.divider{height:1px;background:var(--line);margin:18px 0}
+.hint{font-size:12px;color:var(--muted);margin:8px 0 0}
+.editing{display:none;align-items:center;justify-content:space-between;gap:8px;background:#ecfdf5;border:1px solid #99f6e4;color:#0f766e;border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:12px}
+.editing.on{display:flex}
+.list-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+.list-head h2{margin:0}
+.list-head span{font-size:12px;color:var(--muted)}
+ul{list-style:none;margin:0;padding:0}
+li.row{display:grid;grid-template-columns:1.15fr .85fr 1.15fr auto;gap:12px;align-items:center;padding:14px 12px;border-radius:12px;border:1px solid transparent;border-bottom:1px solid #eef2f7}
+li.row:last-child{border-bottom-color:transparent}
+li.row:hover{background:#f8fafc;border-color:#eef2f7}
+.day strong{display:block;font-size:15px}
+.day small{color:var(--muted);font-size:12px;display:block;margin-top:1px}
+.note{color:var(--muted);font-size:12px;margin-top:3px;max-width:360px}
+.change{font-weight:600;white-space:nowrap}
+.change small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.total{font-weight:700;white-space:nowrap;font-size:16px}
+.total small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.row-actions{display:flex;gap:6px;justify-content:flex-end}
+.empty{padding:46px 16px;text-align:center;color:var(--muted);border:1px dashed #d7dee8;border-radius:14px;background:#fbfcfe}
+@media(max-width:820px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:1fr}body{padding:20px 14px 40px}li.row{grid-template-columns:1fr auto;gap:4px 12px}.day{grid-column:1/-1}.change{grid-column:1}.total{grid-column:2;grid-row:auto;justify-self:end;text-align:right}.row-actions{grid-column:1/-1;justify-content:flex-start}.note{max-width:none}}
+</style></head>
+<body><div class="wrap">
+<header><h1>存钱进度</h1><p>每次更新记一笔，自动对比上次的变化。</p></header>
+<p id="status" role="status">正在连接…</p>
+
+<section class="stats">
+  <div class="stat"><span>最新总数</span><strong id="total">—</strong><div class="sub" id="totalSub"></div></div>
+  <div class="stat"><span>目标进度</span><strong id="progressText">—</strong><div class="bar"><i id="progressBar"></i></div><div class="sub" id="goalSub"></div></div>
+  <div class="stat"><span>较上次</span><strong id="change">—</strong><div class="sub" id="changeSub"></div></div>
+</section>
+
+<div class="layout">
+  <aside class="panel">
+    <h2 id="formTitle">记一笔更新</h2>
+    <div class="editing" id="editing"><span id="editingText"></span><button type="button" class="link" id="cancelEdit">取消编辑</button></div>
+    <form id="form">
+      <label class="field">日期<input id="date" type="date" required></label>
+      <label class="field">最新总数（元）<input id="totalInput" type="number" min="0" step="0.01" required placeholder="例如 252.6"></label>
+      <label class="field">备注（可选）<textarea id="note" maxlength="500" placeholder="例如：老婆发的更新"></textarea></label>
+      <div class="actions-row"><button class="primary" type="submit" id="saveBtn">保存更新</button></div>
+    </form>
+    <div class="divider"></div>
+    <h2>存钱目标</h2>
+    <form id="goalForm">
+      <label class="field">目标金额（元）<input id="goalAmount" type="number" min="0" step="0.01" placeholder="可选，例如 300"></label>
+      <div class="actions-row"><button class="primary" type="submit">保存目标</button><button type="button" class="ghost" id="clearGoal">清除</button></div>
+    </form>
+    <p class="hint">同一天只保留一条记录，重复保存会覆盖当天总数。</p>
+  </aside>
+
+  <section class="panel">
+    <div class="list-head"><h2>更新记录</h2><span id="listMeta"></span></div>
+    <ul id="list"></ul>
+  </section>
+</div>
+</div>
+<script>
+let sequence=0;const pending=new Map();const statusEl=document.getElementById('status');
+const $=id=>document.getElementById(id);
+let editingId=null;
+const fmt=new Intl.NumberFormat('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const money=v=>'¥'+fmt.format(Number(v||0));
+const signed=v=>{const n=Number(v||0);return (n>0?'+':n<0?'-':'')+money(Math.abs(n))};
+const dateLabel=d=>{const[y,m,day]=String(d).split('-');return `${y}年${Number(m)}月${Number(day)}日`};
+const shortDate=d=>{const[y,m,day]=String(d).split('-');return `${Number(m)}月${Number(day)}日`};
+function localToday(){const now=new Date();return new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function setStatus(text,kind){statusEl.textContent=text||'';statusEl.className=kind||''}
+function request(method,params){const id=++sequence;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(new Error('请求超时'))},65000);pending.set(id,{resolve,reject,timer});parent.postMessage({jsonrpc:'2.0',id,method,params},'*')})}
+async function call(name,args){const result=await request('tools/call',{name,arguments:args||{}});if(result.isError)throw new Error(result.content?.[0]?.text||'操作失败');return result.structuredContent}
+function resetForm(){editingId=null;$('form').reset();$('date').value=localToday();$('editing').classList.remove('on');$('formTitle').textContent='记一笔更新';$('saveBtn').textContent='保存更新'}
+function startEdit(entry){editingId=entry.id;$('date').value=entry.date;$('totalInput').value=entry.total;$('note').value=entry.note||'';$('editingText').textContent=`正在编辑 ${dateLabel(entry.date)}`;$('editing').classList.add('on');$('formTitle').textContent='编辑记录';$('saveBtn').textContent='更新记录';$('totalInput').focus()}
+function render(data){
+  const summary=data.summary||{};const entries=data.entries||[];
+  $('total').innerHTML=money(summary.total)+'<small>元</small>';
+  $('totalSub').textContent=summary.latestDate?`更新于 ${dateLabel(summary.latestDate)}`:'还没有记录';
+  if(summary.goal!=null&&Number(summary.goal)>0){
+    const p=Number(summary.progress||0);
+    $('progressText').innerHTML=(Math.round(p*10)/10)+'%';
+    $('progressBar').style.width=Math.min(100,Math.max(0,p))+'%';
+    $('goalSub').textContent=`目标 ${money(summary.goal)}`;
+    $('goalAmount').value=summary.goal;
+  }else{
+    $('progressText').textContent='未设置';
+    $('progressBar').style.width='0%';
+    $('goalSub').textContent='设置目标后可看进度';
+  }
+  if(entries.length>1){
+    const change=Number(summary.lastChange||0);
+    $('change').textContent=signed(change);
+    $('change').className=change>=0?'up':'down';
+    $('changeSub').textContent=`上次 ${shortDate(entries[1].date)} · ${money(entries[1].total)}`;
+  }else{
+    $('change').textContent='—';
+    $('change').className='';
+    $('changeSub').textContent='至少两条记录后计算';
+  }
+  $('listMeta').textContent=entries.length?`共 ${entries.length} 条`:'';
+  const list=$('list');list.replaceChildren();
+  if(!entries.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='还没有记录，把老婆发的「更新：xxx」记进来吧。';list.append(empty);return}
+  for(const entry of entries){
+    const li=document.createElement('li');li.className='row';
+    const day=document.createElement('div');day.className='day';
+    const dStrong=document.createElement('strong');dStrong.textContent=dateLabel(entry.date);
+    day.append(dStrong);
+    if(entry.note){const note=document.createElement('div');note.className='note';note.textContent=entry.note;day.append(note)}
+    const change=document.createElement('div');
+    const cVal=Number(entry.change||0);
+    change.className=entry.index===1?'change':'change '+(cVal>=0?'up':'down');
+    const cMain=document.createElement('span');cMain.textContent=entry.index===1?'首次记录':signed(cVal);
+    const cSmall=document.createElement('small');cSmall.textContent='较上次';
+    change.append(cMain,cSmall);
+    const total=document.createElement('div');total.className='total';total.textContent=money(entry.total);const tSmall=document.createElement('small');tSmall.textContent='总数';total.append(tSmall);
+    const acts=document.createElement('div');acts.className='row-actions';
+    const edit=document.createElement('button');edit.type='button';edit.className='small';edit.textContent='编辑';edit.onclick=()=>startEdit(entry);
+    const del=document.createElement('button');del.type='button';del.className='small ghost';del.textContent='删除';del.onclick=async()=>{if(!confirm(`删除 ${dateLabel(entry.date)} 的记录？`))return;del.disabled=true;try{const data=await call('delete_saving',{id:entry.id});render(data);setStatus('已删除','ok');if(editingId===entry.id)resetForm()}catch(error){setStatus(error.message,'error');del.disabled=false}};
+    acts.append(edit,del);li.append(day,change,total,acts);list.append(li);
+  }
+}
+function show(result){if(result.isError)throw new Error(result.content?.[0]?.text||'操作失败');render(result.structuredContent)}
+window.addEventListener('message',event=>{if(event.source!==parent)return;const message=event.data;if(message?.jsonrpc!=='2.0')return;if(pending.has(message.id)){const wait=pending.get(message.id);pending.delete(message.id);clearTimeout(wait.timer);message.error?wait.reject(new Error(message.error.message)):wait.resolve(message.result)}else if(message.method==='ui/notifications/tool-result'){try{show(message.params);setStatus('')}catch(error){setStatus(error.message,'error')}}});
+$('form').onsubmit=async event=>{event.preventDefault();const button=event.submitter||$('saveBtn');button.disabled=true;try{const args={date:$('date').value,total:Number($('totalInput').value)};const note=$('note').value.trim();if(note)args.note=note;if(editingId)args.id=editingId;const data=await call('save_saving',args);render(data);resetForm();setStatus('已保存','ok')}catch(error){setStatus(error.message,'error')}finally{button.disabled=false}};
+$('goalForm').onsubmit=async event=>{event.preventDefault();const button=event.submitter;button.disabled=true;try{const value=$('goalAmount').value;const data=await call('set_goal',{amount:value===''?null:Number(value)});render(data);setStatus(value===''?'已清除目标':'目标已保存','ok')}catch(error){setStatus(error.message,'error')}finally{button.disabled=false}};
+$('clearGoal').onclick=async()=>{try{$('goalAmount').value='';const data=await call('set_goal',{amount:null});render(data);setStatus('已清除目标','ok')}catch(error){setStatus(error.message,'error')}};
+$('cancelEdit').onclick=resetForm;
+$('date').value=localToday();
+request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'Savings',version:'0.2.0'},appCapabilities:{}}).then(()=>parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized'},'*')).catch(error=>setStatus(error.message,'error'));
+</script></body></html>
