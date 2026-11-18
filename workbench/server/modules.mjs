@@ -332,7 +332,11 @@ export async function stdioRoute(mod, req, res, subPath) {
     const base = '/m/' + mod.id;
     const openTool = JSON.stringify(mod.pages[0].openTool || '');
     const openArgs = JSON.stringify((mod.pages[0].arguments) || {});
-    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(mod.name)}</title><style>html,body{margin:0;height:100%;background:#0e1116}iframe{width:100%;height:100%;border:0;display:block}</style></head><body><iframe id="f" src="${esc(base + '/raw-page' + query)}"></iframe><script>
+    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${esc(mod.name)}</title><style>html{--safe-top:env(safe-area-inset-top,0px);--back-gap:10px}html.native{--back-gap:34px}html,body{margin:0;height:100%;background:#0e1116}body{display:flex;flex-direction:column}#bar{display:none;flex:0 0 auto;align-items:center;padding:max(var(--safe-top),var(--back-gap)) 10px 8px;background:#f8fafc;border-bottom:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(15,23,42,.05)}#bar.on{display:flex}#back{-webkit-tap-highlight-color:transparent;touch-action:manipulation;display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:92px;font:15px -apple-system,BlinkMacSystemFont,"PingFang SC",system-ui,sans-serif;color:#1f2937;background:transparent;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}#back:hover{background:#e8eef5}#back:active{background:#dde5ee}iframe{flex:1;min-height:0;width:100%;border:0;display:block}</style></head><body><div id="bar"><button id="back" type="button" aria-label="返回">← 返回</button></div><iframe id="f" src="${esc(base + '/raw-page' + query)}"></iframe><script>
+const bar=document.getElementById('bar'),back=document.getElementById('back');
+const ua=navigator.userAgent;const nativeApp=!!window.Capacitor||(ua.indexOf('Android')>=0&&ua.indexOf('wv')>=0);
+if(nativeApp)document.documentElement.classList.add('native');
+if(window.self===window.top){bar.classList.add('on');const goBack=()=>{const t=new URLSearchParams(location.search).get('token');const home='/'+(t?'?token='+encodeURIComponent(t):'');if(history.length>1)history.back();else location.href=home;};back.onclick=(e)=>{e.stopPropagation();goBack();};bar.onclick=goBack;}
 const f=document.getElementById('f');
 const RPC='${base}/rpc${query}';
 const OPEN_TOOL=${openTool};
