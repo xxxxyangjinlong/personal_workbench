@@ -1,0 +1,22 @@
+manifest_version = 1
+id = "motionpro-vpn"
+name = "MotionPro VPN"
+version = "0.1.0"
+host_api = "1"
+description = "查询 MotionPro 连接状态，手动连接或断开；断线后不会自动重连。"
+call_timeout_secs = 180
+
+[mcp]
+transport = "stdio"
+command = "python3"
+args = ["server.py"]
+env_from = { MOTIONPRO_BIN = "MOTIONPRO_BIN", MOTIONPRO_LIB_DIR = "MOTIONPRO_LIB_DIR", MOTIONPRO_HOST = "MOTIONPRO_HOST", MOTIONPRO_USER = "MOTIONPRO_USER", MOTIONPRO_PASSWORD = "MOTIONPRO_PASSWORD", MOTIONPRO_KEYCHAIN_SERVICE = "MOTIONPRO_KEYCHAIN_SERVICE" }
+
+[[pages]]
+id = "vpn"
+title = "VPN 连接"
+open_tool = "vpn_status"
+
+[indicator]
+tool = "vpn_status"
+refresh_secs = 60

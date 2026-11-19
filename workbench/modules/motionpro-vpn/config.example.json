@@ -1,0 +1,8 @@
+{
+  "host": "vpn.example.com",
+  "username": "your-username",
+  "keychainService": "motionpro-vpn",
+  "binary": "/usr/local/bin/MotionPro",
+  "libDir": "/usr/local/motionpro",
+  "connectTimeout": 90
+}

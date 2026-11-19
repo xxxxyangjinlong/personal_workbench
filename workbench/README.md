@@ -101,6 +101,10 @@ npm run dev
 （`module.toml` + `server.py` + 页面 HTML，零改动），可当模板用：echo 是最小工具模块模板，
 calendar 演示页面 + SQLite 存储 + 定时任务（daily-check 默认停用）。
 
+`modules/motionpro-vpn/` 封装 macOS MotionPro 命令行：页面提供连接状态、连接/断开和配置，
+`vpn_doctor` 做环境体检，断线后不会自动重连。实际配置与日志在
+`data/modules/motionpro-vpn/`，密码仍保存在 macOS 钥匙串。
+
 小红书模块（`modules/xhs/`）自管：雷达每日扫描的失败重试、周历发帖的时段状态机、题库/人物池。
 数据目录：`data/modules/xhs/`（autopost-state.json、榜单快照）。配置在 `modules/xhs/xhs-config.mjs`
 （env 可覆盖）。由 launchd `com.yangjinlong.xhs-service` 独立运行（node --watch，改模块代码只重启它自己）；

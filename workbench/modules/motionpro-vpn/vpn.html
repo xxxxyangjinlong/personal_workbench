@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MotionPro VPN</title>
+<style>
+:root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--card:#fff;--bg:#f6f8fb;--green:#047857;--green2:#10b981;--amber:#b45309;--red:#b91c1c;--blue:#1d4ed8}
+*{box-sizing:border-box}
+body{margin:0;padding:26px 20px 44px;font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--ink);background:radial-gradient(800px 360px at 10% -10%,#dff7ee 0%,transparent 58%),radial-gradient(720px 360px at 100% 0%,#e5edff 0%,transparent 55%),var(--bg);min-height:100vh}
+.wrap{max-width:920px;margin:0 auto}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+header h1{font-size:26px;line-height:1.2;margin:0 0 5px;letter-spacing:-.02em}
+header p{margin:0;color:var(--muted);font-size:14px;word-break:break-all}
+#status{min-height:22px;margin:12px 0 0;font-size:13px;color:var(--muted)}
+#status.error{color:var(--red)}#status.ok{color:var(--green)}
+.hero{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 10px 30px rgba(15,23,42,.06);display:grid;grid-template-columns:1.1fr 1fr;gap:20px;align-items:center}
+.state-row{display:flex;align-items:center;gap:14px}
+.dot{width:14px;height:14px;border-radius:50%;background:#9ca3af;box-shadow:0 0 0 7px rgba(156,163,175,.14);flex:0 0 auto}
+.dot.ok{background:var(--green2);box-shadow:0 0 0 7px rgba(16,185,129,.14)}
+.dot.warn{background:#f59e0b;box-shadow:0 0 0 7px rgba(245,158,11,.16)}
+.dot.bad{background:#ef4444;box-shadow:0 0 0 7px rgba(239,68,68,.13)}
+.state-main strong{display:block;font-size:34px;line-height:1.1;letter-spacing:-.03em}
+.state-main small{display:block;color:var(--muted);font-size:12px;margin-top:6px}
+.meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-size:13px;color:var(--muted)}
+.meta div{background:#f8fafc;border:1px solid #eef2f7;border-radius:12px;padding:10px 12px}
+.meta b{display:block;color:var(--ink);font-weight:600;word-break:break-all;font-size:13px}
+main{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,.045)}
+.panel h2{font-size:16px;margin:0 0 12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:var(--ink);padding:9px 14px;border-radius:10px;transition:.15s}
+button:hover{border-color:#94a3b8}button:disabled{opacity:.5;cursor:default}
+button.primary{background:#0f766e;border-color:#0f766e;color:#fff;font-weight:600}
+button.danger{color:var(--red);border-color:#fecaca;background:#fff7f7}
+button.ghost{background:transparent}
+.hint{font-size:12px;color:var(--muted);margin:10px 0 0}
+.field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);margin-bottom:10px}
+input{font:inherit;color:var(--ink);padding:9px 11px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;width:100%}
+input:focus{outline:none;border-color:#14b8a6;box-shadow:0 0 0 3px rgba(20,184,166,.15)}
+.divider{height:1px;background:var(--line);margin:16px 0}
+ul{list-style:none;margin:0;padding:0}
+li.check{display:grid;grid-template-columns:20px 1fr;gap:9px;padding:9px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
+li.check:last-child{border-bottom:0}
+.mark{font-weight:700}.mark.ok{color:var(--green)}.mark.bad{color:var(--red)}
+.check small{display:block;color:var(--muted);font-size:12px;word-break:break-all}
+.empty{color:var(--muted);font-size:13px;background:#f8fafc;border:1px dashed #dbe3ee;border-radius:12px;padding:16px;text-align:center}
+.wide{grid-column:1/-1}
+@media(max-width:760px){body{padding:18px 13px 38px}.hero{grid-template-columns:1fr}main{grid-template-columns:1fr}header h1{font-size:23px}.state-main strong{font-size:30px}}
+</style></head>
+<body><div class="wrap">
+<header>
+  <div><h1>MotionPro VPN</h1><p id="identity">正在读取配置…</p></div>
+  <button id="refresh" type="button" class="ghost">刷新</button>
+</header>
+<div id="status" role="status">正在连接模块…</div>
+
+<section class="hero">
+  <div class="state-row">
+    <span id="dot" class="dot"></span>
+    <div class="state-main"><strong id="stateText">—</strong><small id="stateSub">尚未查询</small></div>
+  </div>
+  <div class="meta">
+    <div>VPN 地址<b id="host">—</b></div>
+    <div>用户名<b id="user">—</b></div>
+    <div>状态码<b id="code">—</b></div>
+    <div>查询时间<b id="checked">—</b></div>
+  </div>
+</section>
+
+<main>
+  <section class="panel">
+    <h2>连接操作</h2>
+    <div class="actions">
+      <button id="connect" type="button" class="primary">连接 VPN</button>
+      <button id="disconnect" type="button" class="danger">断开</button>
+    </div>
+    <p class="hint" id="connectHint">连接会等待 VPN 进入已连接状态；断开后保持断开，不会自动重连。</p>
+  </section>
+
+  <section class="panel">
+    <h2>环境检查</h2>
+    <div class="actions"><button id="doctor" type="button">运行检查</button></div>
+    <ul id="checks" style="margin-top:12px"><li class="empty">尚未运行检查</li></ul>
+  </section>
+
+  <section class="panel wide">
+    <h2>模块配置</h2>
+    <form id="configForm">
+      <label class="field">VPN 地址<input id="cfgHost" autocomplete="off" required></label>
+      <label class="field">用户名<input id="cfgUser" autocomplete="username" required></label>
+      <label class="field">钥匙串服务名<input id="cfgService" autocomplete="off" placeholder="motionpro-vpn"></label>
+      <button type="submit">保存配置</button>
+    </form>
+    <div class="divider"></div>
+    <form id="passwordForm">
+      <label class="field">新密码<input id="cfgPassword" type="password" autocomplete="new-password" placeholder="只在需要更新时填写" required></label>
+      <button type="submit">更新密码到钥匙串</button>
+    </form>
+    <p class="hint">密码只写入 macOS 钥匙串，不保存到配置文件或日志；更新后下次连接会直接使用新密码。</p>
+    <p class="hint">也可以在终端更新：<br><code>python3 workbench/modules/motionpro-vpn/scripts/vpnctl.py login</code></p>
+  </section>
+</main>
+</div>
+<script>
+let sequence=0; const pending=new Map(); let data=null;
+const $=id=>document.getElementById(id);
+const stateLabels={idle:'未连接',disconnected:'未连接',connecting:'连接中',reconnecting:'重连中',disconnecting:'断开中',connected:'已连接',both_connected:'已连接',unknown:'未知'};
+function request(method,params){const id=++sequence;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(new Error('请求超时'))},185000);pending.set(id,{resolve,reject,timer});parent.postMessage({jsonrpc:'2.0',id,method,params},'*')})}
+function setStatus(text,kind=''){const el=$('status');el.textContent=text||'';el.className=kind}
+function show(result){if(result?.isError)throw new Error(result.content?.[0]?.text||'操作失败');if(!result?.structuredContent)throw new Error('模块返回数据为空');render(result.structuredContent);return result.structuredContent}
+function fmtDate(value){if(!value)return '—';const d=new Date(value);return isNaN(d)?value:d.toLocaleString('zh-CN',{hour12:false})}
+function render(value){
+  data=value;const status=value.status||{};const cfg=value.config||{};
+  $('identity').textContent=cfg.configured?`${cfg.username} @ ${cfg.host}`:'尚未配置 VPN 地址或用户名';
+  const state=status.state||'unknown';const connected=!!status.connected;
+  const transition=state==='connecting'||state==='reconnecting'||state==='disconnecting';
+  $('stateText').textContent=stateLabels[state]||state;
+  $('stateSub').textContent=status.error||(connected?'VPN 连接正常':transition?'正在等待状态变化':'VPN 当前未连接');
+  $('dot').className='dot '+(connected?'ok':transition?'warn':state==='unknown'?'bad':'');
+  $('host').textContent=cfg.host||'未配置';$('user').textContent=cfg.username||'未配置';
+  $('code').textContent=status.code==null?'—':String(status.code);$('checked').textContent=fmtDate(value.checkedAt);
+  $('cfgHost').value=cfg.host||'';$('cfgUser').value=cfg.username||'';$('cfgService').value=cfg.keychainService||'';
+  $('connect').disabled=connected;$('disconnect').disabled=!connected&&!transition;
+}
+async function invoke(name,args={}){const result=await request('tools/call',{name,arguments:args});const value=show(result);setStatus('');return value}
+function busy(button,text,fn){const old=button.textContent;button.disabled=true;button.textContent=text;Promise.resolve().then(fn).catch(error=>setStatus(error.message,'error')).finally(()=>{button.textContent=old;if(data)render(data)})}
+$('refresh').onclick=()=>busy($('refresh'),'刷新中…',async()=>{await invoke('vpn_status');setStatus('状态已刷新','ok')});
+$('connect').onclick=()=>busy($('connect'),'连接中…',async()=>{await invoke('vpn_connect',{wait:true});setStatus('VPN 已连接','ok')});
+$('disconnect').onclick=()=>busy($('disconnect'),'断开中…',async()=>{await invoke('vpn_disconnect',{keepSession:false});setStatus('已断开，保持断开状态','ok')});
+$('doctor').onclick=()=>busy($('doctor'),'检查中…',async()=>{const value=await invoke('vpn_doctor');const list=$('checks');list.replaceChildren();for(const item of value.checks||[]){const li=document.createElement('li');li.className='check';const mark=document.createElement('span');mark.className='mark '+(item.ok?'ok':'bad');mark.textContent=item.ok?'✓':'!';const body=document.createElement('div');const name=document.createElement('div');name.textContent=item.name;const detail=document.createElement('small');detail.textContent=item.detail||'';body.append(name,detail);li.append(mark,body);list.append(li)}if(!value.checks?.length){const empty=document.createElement('li');empty.className='empty';empty.textContent='没有检查结果';list.append(empty)}setStatus(value.ok?'检查全部通过':'检查发现需要处理的项目',value.ok?'ok':'error')});
+$('configForm').onsubmit=event=>{event.preventDefault();const button=event.submitter||$('configForm').querySelector('button[type=submit]');busy(button,'保存中…',async()=>{await invoke('vpn_save_config',{host:$('cfgHost').value.trim(),username:$('cfgUser').value.trim(),keychainService:$('cfgService').value.trim()});setStatus('配置已保存','ok')})};
+$('passwordForm').onsubmit=event=>{event.preventDefault();const button=event.submitter||$('passwordForm').querySelector('button[type=submit]');const password=$('cfgPassword').value;const host=$('cfgHost').value.trim();const user=$('cfgUser').value.trim();const service=$('cfgService').value.trim();if(!host||!user){setStatus('请先填写 VPN 地址和用户名','error');return}busy(button,'写入中…',async()=>{await invoke('vpn_save_config',{host,username:user,keychainService:service});await invoke('vpn_set_password',{password,keychainService:service});$('cfgPassword').value='';setStatus('密码已更新到 macOS 钥匙串','ok')})};
+window.addEventListener('message',event=>{if(event.source!==parent)return;const message=event.data;if(message?.jsonrpc!=='2.0')return;if(pending.has(message.id)){const wait=pending.get(message.id);pending.delete(message.id);clearTimeout(wait.timer);message.error?wait.reject(new Error(message.error.message)):wait.resolve(message.result)}else if(message.method==='ui/notifications/tool-result'){try{show(message.params);setStatus('')}catch(error){setStatus(error.message,'error')}}});
+request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'MotionPro VPN',version:'0.1.0'},appCapabilities:{}}).then(()=>parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized'},'*')).catch(error=>setStatus(error.message,'error'));
+</script></body></html>
